@@ -24,5 +24,4 @@ Thumbs.db
 # Environment
 .env
 
-# Audio variants (generated, ~40MB)
-audio/hashed/variants/
+# Audio variants are committed for GitHub Pages deployment (~113MB)
