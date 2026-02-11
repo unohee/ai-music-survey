@@ -31,6 +31,9 @@ const CONFIG = {
     audioBasePath: 'audio/',
 };
 
+// 디버그 모드: ?debug=true 로 접속 시 라이프 무한
+const DEBUG_MODE = new URLSearchParams(window.location.search).get('debug') === 'true';
+
 const LABELS = { AI: 0, REAL: 1 };
 const answerToLabel = (ans) => ans === 'ai' ? LABELS.AI : LABELS.REAL;
 const labelToText = (lbl) => lbl === LABELS.AI ? 'AI 생성' : '사람 연주';
@@ -119,6 +122,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkExistingUser();
     await displayWelcomeLeaderboard();
 
+    if (DEBUG_MODE) {
+        console.log('🔧 DEBUG MODE ON — 라이프 무한');
+        document.title = '[DEBUG] ' + document.title;
+    }
     console.log('Survey initialized');
 });
 
@@ -584,12 +591,12 @@ function processGameAnswer(answer, isCorrect, track) {
     } else {
         state.wrongCount++;
         state.streak = 0;
-        state.lives--;
+        if (!DEBUG_MODE) state.lives--;
 
         playWrongSound();
 
         // 라이프 감소 애니메이션
-        animateLifeLost();
+        if (!DEBUG_MODE) animateLifeLost();
     }
 
     // AI/Real 정확도 추적
@@ -731,7 +738,7 @@ function nextQuestion() {
     }
 
     // Game mode: 라이프 체크
-    if (state.lives <= 0) {
+    if (state.lives <= 0 && !DEBUG_MODE) {
         handleGameOver();
         return;
     }
@@ -754,7 +761,14 @@ function completeStage(stage) {
 
     // 클리어 보너스
     state.score += stage.clearBonus;
-    showScorePopup(`+${stage.clearBonus} CLEAR!`);
+
+    // 스테이지 클리어 시 라이프 회복 (+1, 최대치 제한)
+    if (state.lives < CONFIG.maxLives) {
+        state.lives++;
+        showScorePopup(`+${stage.clearBonus} CLEAR! ❤️+1`);
+    } else {
+        showScorePopup(`+${stage.clearBonus} CLEAR!`);
+    }
 
     state.stageResults.push({
         stageId: stage.id,
@@ -1013,22 +1027,78 @@ async function autoSubmitAndShowLeaderboard(prefix) {
 // Sharing
 // ============================================================================
 
-function shareResults() {
-    const totalQuestions = CONFIG.stages.reduce((sum, s) => sum + s.questions, 0);
+function getShareData() {
     const accuracy = state.answers.length > 0
         ? ((state.correctCount / state.answers.length) * 100).toFixed(0) : 0;
     const clearedStages = state.stageResults.filter(r => r.cleared).length;
+    const isAllClear = clearedStages >= CONFIG.stages.length;
+    const url = 'https://unohee.github.io/ai-music-survey/';
 
-    const text = `🎵 AI vs Real Music 챌린지\n` +
-        `${state.score}점 | ${accuracy}% 정확도 | Stage ${clearedStages}/${CONFIG.stages.length} 클리어\n` +
-        `당신도 도전해보세요!`;
+    // 상위 퍼센트 — 마지막으로 표시된 리더보드 순위 사용
+    const percentile = state.lastPercentile || 50;
 
-    if (navigator.share) {
-        navigator.share({ title: 'AI vs Real Music', text, url: window.location.href });
-    } else {
-        navigator.clipboard.writeText(text + '\n' + window.location.href)
-            .then(() => alert('결과가 클립보드에 복사되었습니다!'));
-    }
+    const stageText = isAllClear ? 'ALL CLEAR 🎉' : `Stage ${clearedStages}/${CONFIG.stages.length}`;
+    const emoji = isAllClear ? '👑' : clearedStages >= 4 ? '🔥' : clearedStages >= 2 ? '🎯' : '🎵';
+
+    const text = `${emoji} AI vs Real Music 챌린지\n` +
+        `${state.score}점 | ${accuracy}% 정확도 | ${stageText}\n` +
+        `나는 상위 ${percentile}%! 당신은 AI 음악을 구별할 수 있나요?`;
+
+    return { text, url, score: state.score, accuracy, stageText, percentile, emoji };
+}
+
+function shareResults() {
+    const data = getShareData();
+    const preview = document.getElementById('share-preview');
+    preview.innerHTML = `
+        <div class="share-card">
+            <div class="share-card-emoji">${data.emoji}</div>
+            <div class="share-card-title">AI vs Real Music</div>
+            <div class="share-card-score">${data.score}점</div>
+            <div class="share-card-detail">${data.accuracy}% 정확도 | ${data.stageText}</div>
+            <div class="share-card-percentile">상위 ${data.percentile}%</div>
+        </div>
+    `;
+    document.getElementById('share-modal').classList.remove('hidden');
+}
+
+function closeShareModal() {
+    document.getElementById('share-modal').classList.add('hidden');
+}
+
+function shareToX() {
+    const data = getShareData();
+    const text = encodeURIComponent(`${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`);
+    window.open(`https://x.com/intent/post?text=${text}`, '_blank');
+}
+
+function shareToThreads() {
+    const data = getShareData();
+    const text = encodeURIComponent(`${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`);
+    window.open(`https://www.threads.net/intent/post?text=${text}`, '_blank');
+}
+
+function shareToFacebook() {
+    const data = getShareData();
+    const url = encodeURIComponent(data.url);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+}
+
+function shareToInstagram() {
+    // Instagram은 직접 공유 API 없음 — 텍스트 복사 후 스토리로 안내
+    const data = getShareData();
+    const text = `${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%!\n\n${data.url}`;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('텍스트가 복사되었습니다!\nInstagram 스토리에 붙여넣기 해주세요 📋');
+    });
+}
+
+function copyShareText() {
+    const data = getShareData();
+    const text = `${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('클립보드에 복사되었습니다!');
+    });
 }
 
 function copyLink() {
@@ -1049,7 +1119,7 @@ function restartGame() {
         streak: 0, maxStreak: 0,
         answers: [], stageResults: [], stageTracks: [],
         currentTrack: null, isPlaying: false, startTime: null,
-        aiCorrect: 0, aiTotal: 0, realCorrect: 0, realTotal: 0,
+        aiCorrect: 0, aiTotal: 0, realCorrect: 0, realTotal: 0, lastPercentile: 50,
     };
 
     if (!state.isReturningUser) {
@@ -1196,7 +1266,8 @@ async function displayLeaderboardIn(leaderboardElId, percentileElId) {
     ) + 1;
 
     if (percentileEl && userRank > 0) {
-        const percentile = ((leaderboard.length - userRank) / leaderboard.length * 100).toFixed(0);
+        const percentile = Math.max(1, ((leaderboard.length - userRank) / leaderboard.length * 100).toFixed(0));
+        state.lastPercentile = parseInt(percentile);
         percentileEl.innerHTML = `
             <div class="percentile-badge">
                 <span class="percentile-rank">${userRank}위</span>
