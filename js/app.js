@@ -1223,18 +1223,15 @@ async function displayWelcomeLeaderboard() {
     }
 
     const top5 = leaderboard.slice(0, 5);
-    let html = '<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>닉네임</th><th>점수</th><th>스테이지</th></tr></thead><tbody>';
+    let html = '<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>닉네임</th><th>점수</th></tr></thead><tbody>';
 
     top5.forEach((entry, index) => {
         const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
-        const stageText = entry.maxStage >= CONFIG.stages.length
-            ? 'ALL CLEAR' : `Stage ${entry.maxStage || '?'}`;
         html += `
             <tr>
                 <td>${rankIcon}</td>
                 <td>${escapeHtml(entry.nickname)}</td>
                 <td>${entry.score}</td>
-                <td>${stageText}</td>
             </tr>
         `;
     });
@@ -1274,35 +1271,29 @@ async function displayLeaderboardIn(leaderboardElId, percentileElId) {
     }
 
     const top10 = leaderboard.slice(0, 10);
-    let html = '<table class="leaderboard-table"><thead><tr><th>#</th><th>닉네임</th><th>점수</th><th>스테이지</th></tr></thead><tbody>';
+    let html = '<table class="leaderboard-table"><thead><tr><th>#</th><th>닉네임</th><th>점수</th></tr></thead><tbody>';
 
     top10.forEach((entry, index) => {
         const isCurrentUser = entry.nickname === state.nickname && entry.score === state.score;
         const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
-        const stageText = entry.maxStage >= CONFIG.stages.length
-            ? '🎉 ALL CLEAR' : `Stage ${entry.maxStage || '?'}`;
 
         html += `
             <tr class="${isCurrentUser ? 'current-user' : ''}">
                 <td>${rankIcon}</td>
                 <td>${escapeHtml(entry.nickname)}</td>
                 <td>${entry.score}</td>
-                <td>${stageText}</td>
             </tr>
         `;
     });
 
     if (userRank > 10) {
         const userEntry = leaderboard[userRank - 1];
-        const stageText = userEntry.maxStage >= CONFIG.stages.length
-            ? '🎉 ALL CLEAR' : `Stage ${userEntry.maxStage || '?'}`;
         html += `
-            <tr class="separator"><td colspan="4">...</td></tr>
+            <tr class="separator"><td colspan="3">...</td></tr>
             <tr class="current-user">
                 <td>${userRank}</td>
                 <td>${escapeHtml(userEntry.nickname)}</td>
                 <td>${userEntry.score}</td>
-                <td>${stageText}</td>
             </tr>
         `;
     }
