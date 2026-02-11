@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Music Survey - Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #60a5fa; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        .stat-label {
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .section { margin-bottom: 30px; }
+        .section h2 {
+            margin-bottom: 15px;
+            color: #fff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        th { background: #252540; color: #60a5fa; }
+        tr:hover { background: #252540; }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: #60a5fa; color: #000; }
+        .btn-secondary { background: #333; color: #fff; }
+        
+        .chart-container {
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .error { color: #ef4444; padding: 20px; text-align: center; }
+        
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin: 2px;
+        }
+        .tag-pro { background: #059669; }
+        .tag-amateur { background: #2563eb; }
+        .tag-listener { background: #7c3aed; }
+        .tag-none { background: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 AI Music Survey - Admin Dashboard</h1>
+        
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-participants">-</div>
+                <div class="stat-label">총 참여자</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-accuracy">-</div>
+                <div class="stat-label">평균 정확도</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-score">-</div>
+                <div class="stat-label">평균 점수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-ai-accuracy">-</div>
+                <div class="stat-label">AI 탐지율</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-real-accuracy">-</div>
+                <div class="stat-label">Real 인식률</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>참여자 목록</h2>
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" onclick="refreshData()">새로고침</button>
+                <button class="btn btn-secondary" onclick="exportCSV()">CSV 내보내기</button>
+            </div>
+            <div id="results-table">
+                <div class="loading">데이터 로딩 중...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>음악 경험 분포</h2>
+            <div id="music-exp-chart" class="chart-container"></div>
+        </div>
+    </div>
+    
+    <script>
+        // API URL - Cloudflare Tunnel URL로 변경
+        const API_URL = window.location.origin;
+        
+        async function fetchStats() {
+            try {
+                const res = await fetch(`${API_URL}/api/stats`);
+                const data = await res.json();
+                
+                document.getElementById('total-participants').textContent = data.total_participants;
+                document.getElementById('avg-accuracy').textContent = data.avg_accuracy + '%';
+                document.getElementById('avg-score').textContent = Math.round(data.avg_score);
+                document.getElementById('avg-ai-accuracy').textContent = data.avg_ai_accuracy + '%';
+                document.getElementById('avg-real-accuracy').textContent = data.avg_real_accuracy + '%';
+                
+                // 음악 경험 분포
+                const expLabels = {
+                    'professional': '전문가',
+                    'amateur': '아마추어',
+                    'listener': '감상 취미',
+                    'none': '경험 없음',
+                    '': '미응답'
+                };
+                let expHtml = '<div style="display: flex; gap: 20px; flex-wrap: wrap;">';
+                for (const [key, count] of Object.entries(data.music_experience)) {
+                    expHtml += `<div class="stat-card" style="flex: 1; min-width: 150px;">
+                        <div class="stat-value">${count}</div>
+                        <div class="stat-label">${expLabels[key] || key}</div>
+                    </div>`;
+                }
+                expHtml += '</div>';
+                document.getElementById('music-exp-chart').innerHTML = expHtml;
+                
+            } catch (e) {
+                console.error('Stats error:', e);
+            }
+        }
+        
+        async function fetchResults() {
+            try {
+                const res = await fetch(`${API_URL}/api/results?limit=100`);
+                const data = await res.json();
+                
+                if (data.length === 0) {
+                    document.getElementById('results-table').innerHTML = 
+                        '<p style="color: #888; padding: 20px;">아직 참여자가 없습니다.</p>';
+                    return;
+                }
+                
+                const expTags = {
+                    'professional': '<span class="tag tag-pro">전문가</span>',
+                    'amateur': '<span class="tag tag-amateur">아마추어</span>',
+                    'listener': '<span class="tag tag-listener">감상자</span>',
+                    'none': '<span class="tag tag-none">없음</span>',
+                };
+                
+                let html = `<table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>닉네임</th>
+                            <th>점수</th>
+                            <th>정확도</th>
+                            <th>AI탐지</th>
+                            <th>Real인식</th>
+                            <th>음악경험</th>
+                            <th>시간</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                data.forEach((row, i) => {
+                    const date = new Date(row.created_at || row.timestamp);
+                    html += `<tr>
+                        <td>${i + 1}</td>
+                        <td>${escapeHtml(row.nickname)}</td>
+                        <td>${row.score}</td>
+                        <td>${row.accuracy?.toFixed(1)}%</td>
+                        <td>${row.ai_accuracy?.toFixed(1)}%</td>
+                        <td>${row.real_accuracy?.toFixed(1)}%</td>
+                        <td>${expTags[row.music_experience] || '-'}</td>
+                        <td>${date.toLocaleString('ko-KR')}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('results-table').innerHTML = html;
+                
+            } catch (e) {
+                document.getElementById('results-table').innerHTML = 
+                    `<div class="error">데이터 로딩 실패: ${e.message}</div>`;
+            }
+        }
+        
+        async function exportCSV() {
+            try {
+                const res = await fetch(`${API_URL}/api/export`);
+                const data = await res.json();
+                
+                if (data.length === 0) {
+                    alert('내보낼 데이터가 없습니다.');
+                    return;
+                }
+                
+                // CSV 생성
+                const headers = Object.keys(data[0]);
+                let csv = headers.join(',') + '\n';
+                
+                data.forEach(row => {
+                    csv += headers.map(h => {
+                        let val = row[h] || '';
+                        if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+                            val = '"' + val.replace(/"/g, '""') + '"';
+                        }
+                        return val;
+                    }).join(',') + '\n';
+                });
+                
+                // 다운로드
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `survey_results_${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+            } catch (e) {
+                alert('내보내기 실패: ' + e.message);
+            }
+        }
+        
+        function refreshData() {
+            fetchStats();
+            fetchResults();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 초기 로드
+        refreshData();
+        
+        // 30초마다 자동 새로고침
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>
