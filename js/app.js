@@ -540,7 +540,7 @@ function nextQuestion() {
 // Results
 // ============================================================================
 
-function showResults() {
+async function showResults() {
     showScreen('results');
 
     const accuracy = (state.correctCount / CONFIG.totalQuestions) * 100;
