@@ -328,6 +328,22 @@
 
     <audio id="audio-player" preload="auto"></audio>
 
+    <!-- SNS 공유 모달 -->
+    <div id="share-modal" class="share-modal hidden">
+        <div class="share-modal-content">
+            <h3>결과 공유하기</h3>
+            <div class="share-preview" id="share-preview"></div>
+            <div class="share-buttons">
+                <button class="share-btn share-x" onclick="shareToX()">𝕏 Post</button>
+                <button class="share-btn share-threads" onclick="shareToThreads()">Threads</button>
+                <button class="share-btn share-facebook" onclick="shareToFacebook()">Facebook</button>
+                <button class="share-btn share-instagram" onclick="shareToInstagram()">Instagram</button>
+                <button class="share-btn share-copy" onclick="copyShareText()">복사</button>
+            </div>
+            <button class="share-close" onclick="closeShareModal()">닫기</button>
+        </div>
+    </div>
+
     <script src="js/app.js"></script>
 </body>
 </html>

@@ -1048,3 +1048,93 @@ h1 {
         font-size: 1.5rem;
     }
 }
+
+/* ============================================================================
+   Share Modal
+   ============================================================================ */
+
+.share-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.share-modal.hidden { display: none; }
+
+.share-modal-content {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+}
+
+.share-modal-content h3 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.share-card {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.share-card-emoji { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.share-card-title { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+.share-card-score { font-size: 2rem; font-weight: 700; color: var(--primary); }
+.share-card-detail { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.3rem; }
+.share-card-percentile {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #4ade80;
+    margin-top: 0.5rem;
+}
+
+.share-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.share-btn {
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+    color: #fff;
+}
+
+.share-btn:hover { transform: scale(1.05); }
+.share-btn:active { transform: scale(0.95); }
+
+.share-x { background: #000; }
+.share-threads { background: #000; }
+.share-facebook { background: #1877f2; }
+.share-instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+.share-copy { background: rgba(255, 255, 255, 0.15); color: var(--text-primary); }
+
+.share-close {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-secondary);
+    padding: 0.5rem 2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.share-close:hover { border-color: rgba(255, 255, 255, 0.4); }
