@@ -256,7 +256,7 @@ def get_leaderboard(limit: int = 100):
         SELECT nickname, score, accuracy, correct_count, max_streak,
                max_stage, lives_remaining, is_game_over, timestamp
         FROM results
-        ORDER BY max_stage DESC, score DESC
+        ORDER BY score DESC
         LIMIT ?
     ''', (limit,))
 

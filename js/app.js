@@ -1197,10 +1197,7 @@ async function getLeaderboard() {
             });
 
             const leaderboard = Array.from(uniqueMap.values());
-            leaderboard.sort((a, b) => {
-                if (b.maxStage !== a.maxStage) return b.maxStage - a.maxStage;
-                return b.score - a.score;
-            });
+            leaderboard.sort((a, b) => b.score - a.score);
             return leaderboard.slice(0, 100);
         }
     } catch (e) {
