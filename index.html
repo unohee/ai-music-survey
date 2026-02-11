@@ -16,10 +16,18 @@
             <h1>AI vs Real Music</h1>
             <p class="subtitle">당신은 AI가 만든 음악을 구분할 수 있나요?</p>
 
+            <!-- Welcome 리더보드 -->
+            <div class="welcome-leaderboard">
+                <h3>🏆 Top Players</h3>
+                <div id="welcome-leaderboard-body">
+                    <p class="loading">리더보드 불러오는 중...</p>
+                </div>
+            </div>
+
             <div class="info-box">
-                <p>🎧 <strong>10-15초</strong> 음악 클립을 듣고</p>
-                <p>🤖 <strong>AI 생성</strong>인지 <strong>사람 연주</strong>인지 맞춰보세요!</p>
-                <p>📊 총 <strong>30문제</strong>, 약 7-10분 소요</p>
+                <p>🎧 음악 클립을 듣고 <strong>AI 생성</strong>인지 <strong>사람 연주</strong>인지 맞춰보세요!</p>
+                <p>❤️ 라이프 <strong>3개</strong> — 틀리면 라이프를 잃습니다!</p>
+                <p>🎮 <strong>6개 스테이지</strong>를 클리어하세요!</p>
             </div>
 
             <div class="tip-box">
@@ -29,65 +37,91 @@
             <div class="user-form">
                 <div class="form-group">
                     <input type="text" id="user-nickname" placeholder="닉네임 *" required maxlength="20">
+                    <p id="nickname-status" class="nickname-status"></p>
                 </div>
                 <div class="form-group">
                     <input type="email" id="user-email" placeholder="이메일 (선택사항)">
                 </div>
             </div>
 
-            <button class="btn btn-primary" onclick="startGame()">시작하기</button>
+            <button class="btn btn-primary" id="btn-start" onclick="startGame()">시작하기</button>
         </div>
 
-        <!-- Practice Screen -->
-        <div id="screen-practice" class="screen">
+        <!-- Evaluation Screen (워밍업 5문제 - 연구 데이터 수집) -->
+        <div id="screen-evaluation" class="screen">
             <div class="header">
-                <span class="badge">연습 모드</span>
-                <span class="practice-count">연습 <span id="practice-current">1</span>/3</span>
+                <span class="badge badge-eval">워밍업</span>
+                <span class="practice-count">워밍업 <span id="eval-current">1</span>/5</span>
             </div>
 
+            <div class="eval-info">라이프 소모 없음 — 편하게 풀어보세요!</div>
+
             <div class="player-container">
-                <div class="waveform" id="waveform-practice">
+                <div class="waveform" id="waveform-eval">
                     <div class="waveform-progress"></div>
                 </div>
                 <div class="player-controls">
-                    <button class="btn-play" id="btn-play-practice" onclick="togglePlay()">
+                    <button class="btn-play" id="btn-play-eval" onclick="togglePlay()">
                         <span class="play-icon">▶</span>
                     </button>
-                    <button class="btn-replay" onclick="replayAudio()" title="처음부터 다시 듣기">
-                        ↺
-                    </button>
+                    <button class="btn-replay" onclick="replayAudio()" title="처음부터 다시 듣기">↺</button>
                 </div>
                 <div class="time-display">
-                    <span id="time-current-practice">0:00</span> / <span id="time-total-practice">0:00</span>
+                    <span id="time-current-eval">0:00</span> / <span id="time-total-eval">0:00</span>
                 </div>
                 <div id="debug-info" class="debug-info"></div>
             </div>
 
             <div class="choices">
-                <button class="btn btn-choice" onclick="submitAnswer('ai')">
-                    🤖 AI 생성
-                </button>
-                <button class="btn btn-choice" onclick="submitAnswer('real')">
-                    🎸 사람 연주
-                </button>
+                <button class="btn btn-choice" onclick="submitAnswer('ai')">🤖 AI 생성</button>
+                <button class="btn btn-choice" onclick="submitAnswer('real')">🎸 사람 연주</button>
             </div>
 
-            <div id="feedback-practice" class="feedback hidden"></div>
-            <button id="btn-next-practice" class="btn btn-secondary hidden" onclick="nextQuestion()">다음 →</button>
+            <div id="feedback-eval" class="feedback hidden"></div>
+            <button id="btn-next-eval" class="btn btn-secondary hidden" onclick="nextQuestion()">다음 →</button>
+        </div>
+
+        <!-- Stage Intro Screen -->
+        <div id="screen-stage-intro" class="screen">
+            <div class="stage-intro-container">
+                <div class="stage-number" id="stage-intro-number">STAGE 1</div>
+                <h2 class="stage-name" id="stage-intro-name">Normal</h2>
+                <p class="stage-description" id="stage-intro-desc">원본 음질의 12초 클립을 듣고 판별하세요.</p>
+                <div class="stage-condition" id="stage-intro-condition">
+                    <span>📋 5문제</span>
+                    <span>⭐ 기본 10점</span>
+                </div>
+                <div class="stage-lives" id="stage-intro-lives">
+                    <span class="life">❤️</span>
+                    <span class="life">❤️</span>
+                    <span class="life">❤️</span>
+                </div>
+                <button class="btn btn-primary" onclick="startStage()">시작하기</button>
+            </div>
         </div>
 
         <!-- Main Game Screen -->
         <div id="screen-game" class="screen">
             <div class="header">
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
+                <div class="header-left">
+                    <span class="stage-badge" id="stage-badge">Stage 1: Normal</span>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <span class="progress-text"><span id="question-current">1</span>/5</span>
                     </div>
-                    <span class="progress-text"><span id="question-current">1</span>/30</span>
                 </div>
-                <div class="score-display">
-                    <span class="score-label">점수</span>
-                    <span class="score-value" id="score">0</span>
+                <div class="header-right">
+                    <div class="lives-display" id="lives-display">
+                        <span class="life">❤️</span>
+                        <span class="life">❤️</span>
+                        <span class="life">❤️</span>
+                    </div>
+                    <div class="score-display">
+                        <span class="score-label">점수</span>
+                        <span class="score-value" id="score">0</span>
+                    </div>
                 </div>
             </div>
 
@@ -114,9 +148,7 @@
                     <button class="btn-play" id="btn-play-game" onclick="togglePlay()">
                         <span class="play-icon">▶</span>
                     </button>
-                    <button class="btn-replay" onclick="replayAudio()" title="처음부터 다시 듣기">
-                        ↺
-                    </button>
+                    <button class="btn-replay" onclick="replayAudio()" title="처음부터 다시 듣기">↺</button>
                 </div>
                 <div class="time-display">
                     <span id="time-current">0:00</span> / <span id="time-total">0:00</span>
@@ -125,21 +157,76 @@
             </div>
 
             <div class="choices" id="choices">
-                <button class="btn btn-choice" id="btn-ai" onclick="submitAnswer('ai')">
-                    🤖 AI 생성
-                </button>
-                <button class="btn btn-choice" id="btn-real" onclick="submitAnswer('real')">
-                    🎸 사람 연주
-                </button>
+                <button class="btn btn-choice" id="btn-ai" onclick="submitAnswer('ai')">🤖 AI 생성</button>
+                <button class="btn btn-choice" id="btn-real" onclick="submitAnswer('real')">🎸 사람 연주</button>
             </div>
 
             <div id="feedback" class="feedback hidden"></div>
             <button id="btn-next" class="btn btn-secondary hidden" onclick="nextQuestion()">다음 →</button>
         </div>
 
-        <!-- Results Screen -->
+        <!-- Game Over Screen -->
+        <div id="screen-game-over" class="screen">
+            <div class="game-over-container">
+                <div class="game-over-icon">💀</div>
+                <h1 class="game-over-title">Game Over</h1>
+                <p class="game-over-stage" id="gameover-stage">Stage 2에서 탈락!</p>
+                <div class="game-over-score" id="gameover-score">0</div>
+                <div class="game-over-score-label">최종 점수</div>
+
+                <!-- 스테이지별 요약 -->
+                <div class="stage-summary" id="gameover-stage-summary">
+                    <!-- JS에서 동적 생성 -->
+                </div>
+
+                <!-- 인구통계 폼 -->
+                <div class="demographics-form">
+                    <h3>간단한 정보 (선택사항)</h3>
+                    <div class="form-group">
+                        <label>음악 경험</label>
+                        <select id="gameover-music-experience">
+                            <option value="">선택하세요</option>
+                            <option value="none">음악 경험 없음</option>
+                            <option value="listener">음악 감상 취미</option>
+                            <option value="amateur">아마추어 연주자</option>
+                            <option value="professional">전문 음악인/프로듀서</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>AI 음악 경험</label>
+                        <select id="gameover-ai-experience">
+                            <option value="">선택하세요</option>
+                            <option value="never">들어본 적 없음</option>
+                            <option value="few">몇 번 들어봄</option>
+                            <option value="often">자주 들음</option>
+                            <option value="creator">직접 생성해봄</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>판단 기준</label>
+                        <textarea id="gameover-criteria" rows="3" placeholder="예: 음질, 리듬감, 감정 표현 등..."></textarea>
+                    </div>
+                </div>
+
+                <!-- 리더보드 -->
+                <div class="leaderboard-section">
+                    <h3>🏆 리더보드</h3>
+                    <div class="percentile-display" id="gameover-percentile-display"></div>
+                    <div class="leaderboard" id="gameover-leaderboard"></div>
+                </div>
+
+                <div class="results-actions">
+                    <button class="btn btn-primary" onclick="submitResultsFromGameOver()">결과 제출하기</button>
+                    <button class="btn btn-secondary" onclick="shareResults()">결과 공유하기</button>
+                    <button class="btn btn-secondary" onclick="restartGame()">다시 도전하기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen (All Clear) -->
         <div id="screen-results" class="screen">
             <div class="results-header">
+                <div class="all-clear-icon">🎉</div>
                 <div class="final-score" id="final-score">0</div>
                 <div class="final-score-label">최종 점수</div>
             </div>
@@ -150,12 +237,16 @@
                     <div class="result-label">정확도</div>
                 </div>
                 <div class="result-stat">
-                    <div class="result-value" id="result-correct">0/30</div>
+                    <div class="result-value" id="result-correct">0/35</div>
                     <div class="result-label">정답</div>
                 </div>
                 <div class="result-stat">
                     <div class="result-value" id="result-streak">0</div>
                     <div class="result-label">최대 연속</div>
+                </div>
+                <div class="result-stat">
+                    <div class="result-value" id="result-lives">❤️×3</div>
+                    <div class="result-label">남은 라이프</div>
                 </div>
             </div>
 
@@ -171,25 +262,23 @@
                 </div>
             </div>
 
-            <div class="rank-display" id="rank-display">
-                <!-- Rank will be shown here -->
+            <!-- 스테이지별 요약 -->
+            <div class="stage-summary" id="results-stage-summary">
+                <!-- JS에서 동적 생성 -->
             </div>
+
+            <div class="rank-display" id="rank-display"></div>
 
             <!-- Leaderboard -->
             <div class="leaderboard-section">
                 <h3>🏆 리더보드</h3>
-                <div class="percentile-display" id="percentile-display">
-                    <!-- Percentile will be shown here -->
-                </div>
-                <div class="leaderboard" id="leaderboard">
-                    <!-- Leaderboard entries will be shown here -->
-                </div>
+                <div class="percentile-display" id="percentile-display"></div>
+                <div class="leaderboard" id="leaderboard"></div>
             </div>
 
             <!-- Demographics Form -->
             <div class="demographics-form">
                 <h3>간단한 정보 (선택사항)</h3>
-
                 <div class="form-group">
                     <label>음악 경험</label>
                     <select id="music-experience">
@@ -200,7 +289,6 @@
                         <option value="professional">전문 음악인/프로듀서</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label>AI 음악 경험</label>
                     <select id="ai-experience">
@@ -211,7 +299,6 @@
                         <option value="creator">직접 생성해봄</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label>판단 기준 (어떤 점에서 AI/Real을 구분했나요?)</label>
                     <textarea id="criteria" rows="3" placeholder="예: 음질, 리듬감, 감정 표현 등..."></textarea>

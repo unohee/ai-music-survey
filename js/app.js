@@ -1,7 +1,7 @@
 /**
- * AI vs Real Music Survey
+ * AI vs Real Music Survey — Gamification Edition
  * Created: 2026-02-11
- * Purpose: Interactive gamified survey for AI music detection research
+ * Purpose: 스테이지 기반 게이미피케이션 + AI 음악 탐지 연구 데이터 수집
  */
 
 // ============================================================================
@@ -9,20 +9,31 @@
 // ============================================================================
 
 const CONFIG = {
-    totalQuestions: 30,
-    practiceQuestions: 3,
-    audioBasePath: 'audio/',
-    // Points
-    basePoints: 10,
+    evaluationQuestions: 5,  // 워밍업 (연구 데이터, 라이프 무소모)
+    stages: [
+        { id: 1, name: 'Normal',          questions: 5, variant: 'original', pointBase: 10, clearBonus: 50,
+          desc: '원본 음질의 12초 클립을 듣고 판별하세요.' },
+        { id: 2, name: 'Time Pressure',   questions: 5, variant: '8s',      pointBase: 15, clearBonus: 75,
+          desc: '8초 클립만으로 빠르게 판단하세요!' },
+        { id: 3, name: 'Codec Challenge',  questions: 5, variant: '128k',    pointBase: 20, clearBonus: 100,
+          desc: '128kbps 코덱 압축 — 미세한 차이를 잡아내세요.' },
+        { id: 4, name: 'Lo-Fi Challenge',  questions: 5, variant: '64k',     pointBase: 25, clearBonus: 125,
+          desc: '64kbps 저음질 — 극한 조건에서 판별!' },
+        { id: 5, name: 'Speed Round',      questions: 5, variant: '4s',      pointBase: 30, clearBonus: 150,
+          desc: '4초! 직감으로 승부하세요.' },
+        { id: 6, name: 'Adversarial',      questions: 5, variant: 'original', pointBase: 40, clearBonus: 200,
+          desc: 'AI 모델도 헷갈려한 트랙들 — 보스 스테이지!', adversarial: true },
+    ],
+    maxLives: 3,
     streakBonus: 5,
     maxStreakBonus: 50,
+    lifeBonus: 100,  // 클리어 시 남은 라이프당 보너스
+    audioBasePath: 'audio/',
 };
 
-// Label mapping (obfuscated in pool.json)
 const LABELS = { AI: 0, REAL: 1 };
 const answerToLabel = (ans) => ans === 'ai' ? LABELS.AI : LABELS.REAL;
 const labelToText = (lbl) => lbl === LABELS.AI ? 'AI 생성' : '사람 연주';
-const labelToAnswer = (lbl) => lbl === LABELS.AI ? 'ai' : 'real';
 
 // ============================================================================
 // Sound Effects
@@ -30,8 +41,6 @@ const labelToAnswer = (lbl) => lbl === LABELS.AI ? 'ai' : 'real';
 
 const sfxCorrect = new Audio('audio/sfx/correct.mp3');
 const sfxWrong = new Audio('audio/sfx/wrong.mp3');
-
-// Preload
 sfxCorrect.load();
 sfxWrong.load();
 
@@ -40,14 +49,13 @@ function playCorrectSound() {
     sfxCorrect.volume = 0.5;
     sfxCorrect.play().catch(() => {});
 }
-
 function playWrongSound() {
     sfxWrong.currentTime = 0;
     sfxWrong.volume = 0.5;
     sfxWrong.play().catch(() => {});
 }
 
-// Debug mode (toggle with 'D' key)
+// Debug mode
 let debugMode = false;
 
 // ============================================================================
@@ -55,18 +63,29 @@ let debugMode = false;
 // ============================================================================
 
 let state = {
-    mode: 'welcome', // welcome, practice, game, results
-    currentQuestion: 0,
-    practiceIndex: 0,
+    mode: 'welcome',       // welcome, evaluation, stage-intro, game, game-over, results
     nickname: '',
     email: '',
+    isReturningUser: false,
+
+    // Evaluation (워밍업)
+    evalIndex: 0,
+    evalTracks: [],
+    evalAnswers: [],
+
+    // Game
+    currentStageIndex: 0,  // 0~5 (CONFIG.stages 인덱스)
+    stageQuestionIndex: 0, // 스테이지 내 문제 인덱스 (0~4)
+    lives: CONFIG.maxLives,
     score: 0,
     correctCount: 0,
     wrongCount: 0,
     streak: 0,
     maxStreak: 0,
     answers: [],
-    selectedTracks: [],
+    stageResults: [],      // [{stageId, name, cleared, correct, total, score}]
+    stageTracks: [],       // 현재 스테이지 트랙 목록
+
     currentTrack: null,
     isPlaying: false,
     startTime: null,
@@ -76,12 +95,15 @@ let state = {
     realTotal: 0,
 };
 
-// Audio pool - will be loaded from pool.json
+// Audio pool
 let audioPool = [];
-let practicePool = [];
-
-// Audio element
 let audio = null;
+
+// ============================================================================
+// API
+// ============================================================================
+
+const API_URL = 'https://survey.intrect.io';
 
 // ============================================================================
 // Initialization
@@ -89,22 +111,13 @@ let audio = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     audio = document.getElementById('audio-player');
-
-    // Setup audio events
     audio.addEventListener('timeupdate', updateProgress);
     audio.addEventListener('ended', onAudioEnded);
     audio.addEventListener('loadedmetadata', onAudioLoaded);
 
-    // Debug mode disabled for production
-    // document.addEventListener('keydown', (e) => {
-    //     if (e.key === 'd' || e.key === 'D') {
-    //         debugMode = !debugMode;
-    //         updateDebugInfo(state.currentTrack);
-    //     }
-    // });
-
-    // Load audio pool
     await loadAudioPool();
+    await checkExistingUser();
+    await displayWelcomeLeaderboard();
 
     console.log('Survey initialized');
 });
@@ -114,36 +127,73 @@ async function loadAudioPool() {
         const response = await fetch('audio/pool.json');
         const data = await response.json();
         audioPool = data.tracks;
-        practicePool = data.practice || audioPool.slice(0, 3);
         console.log(`Loaded ${audioPool.length} tracks`);
     } catch (error) {
         console.error('Failed to load audio pool:', error);
-        // Use demo data if pool.json doesn't exist
         generateDemoPool();
     }
 }
 
 function generateDemoPool() {
-    // Generate demo pool for testing
     audioPool = [];
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
         audioPool.push({
-            id: `ai_${i}`,
-            file: `ai/track_${String(i).padStart(3, '0')}.mp3`,
-            label: 'ai',
-            duration: 12
+            id: `ai_${String(i).padStart(3, '0')}`,
+            file: `hashed/demo_ai_${i}.mp3`,
+            label: 0, duration: 12,
+            variants: {}, adversarial_score: null
         });
     }
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
         audioPool.push({
-            id: `real_${i}`,
-            file: `real/track_${String(i).padStart(3, '0')}.mp3`,
-            label: 'real',
-            duration: 12
+            id: `real_${String(i).padStart(3, '0')}`,
+            file: `hashed/demo_real_${i}.mp3`,
+            label: 1, duration: 12,
+            variants: {}, adversarial_score: null
         });
     }
-    practicePool = audioPool.slice(0, 3);
-    console.log('Using demo pool');
+}
+
+// ============================================================================
+// IP Check / User Registration
+// ============================================================================
+
+async function checkExistingUser() {
+    try {
+        const res = await fetch(`${API_URL}/api/check-user`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.exists && data.nickname) {
+                state.isReturningUser = true;
+                state.nickname = data.nickname;
+                const input = document.getElementById('user-nickname');
+                input.value = data.nickname;
+                input.disabled = true;
+                document.getElementById('nickname-status').textContent = '이전에 등록한 닉네임입니다.';
+                document.getElementById('nickname-status').classList.add('returning');
+            }
+        }
+    } catch (e) {
+        console.log('IP check unavailable (offline mode)');
+    }
+}
+
+async function registerUser(nickname) {
+    try {
+        const res = await fetch(`${API_URL}/api/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nickname })
+        });
+        if (res.ok) {
+            return { success: true };
+        }
+        const err = await res.json();
+        return { success: false, message: err.detail || '등록 실패' };
+    } catch (e) {
+        // 오프라인이면 그냥 진행
+        return { success: true };
+    }
 }
 
 // ============================================================================
@@ -151,19 +201,18 @@ function generateDemoPool() {
 // ============================================================================
 
 function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
-    });
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(`screen-${screenId}`).classList.add('active');
     state.mode = screenId;
+    // 스크롤 맨 위로
+    window.scrollTo(0, 0);
 }
 
 // ============================================================================
 // Game Flow
 // ============================================================================
 
-function startGame() {
-    // Validate nickname
+async function startGame() {
     const nickname = document.getElementById('user-nickname').value.trim();
     const email = document.getElementById('user-email').value.trim();
 
@@ -173,104 +222,216 @@ function startGame() {
         return;
     }
 
+    // 신규 사용자면 등록
+    if (!state.isReturningUser) {
+        const reg = await registerUser(nickname);
+        if (!reg.success) {
+            alert(reg.message);
+            return;
+        }
+    }
+
     state.nickname = nickname;
     state.email = email;
     state.startTime = new Date();
-    state.practiceIndex = 0;
 
-    // Select random tracks for practice
-    practicePool = shuffleArray([...audioPool]).slice(0, CONFIG.practiceQuestions);
+    // 워밍업 트랙 선택 (5개: AI 3 + Real 2 or AI 2 + Real 3)
+    const aiTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.AI));
+    const realTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.REAL));
+    state.evalTracks = shuffleArray([...aiTracks.slice(0, 3), ...realTracks.slice(0, 2)]);
+    state.evalIndex = 0;
+    state.evalAnswers = [];
 
-    showScreen('practice');
-    loadPracticeQuestion();
+    showScreen('evaluation');
+    loadEvalQuestion();
 }
 
-function loadPracticeQuestion() {
-    const track = practicePool[state.practiceIndex];
+// ============================================================================
+// Evaluation (워밍업 5문제)
+// ============================================================================
+
+function loadEvalQuestion() {
+    const track = state.evalTracks[state.evalIndex];
     state.currentTrack = track;
 
-    document.getElementById('practice-current').textContent = state.practiceIndex + 1;
-
-    loadAudio(track);
+    document.getElementById('eval-current').textContent = state.evalIndex + 1;
+    loadAudio(track, 'original');
     resetChoices();
     hideFeedback();
-    document.getElementById('btn-next-practice').classList.add('hidden');
+    document.getElementById('btn-next-eval').classList.add('hidden');
 }
 
-function startMainGame() {
-    // Reset state for main game
-    state.currentQuestion = 0;
+function processEvalAnswer(answer, isCorrect, track) {
+    state.evalAnswers.push({
+        trackId: track.id,
+        label: track.label,
+        answer: answer,
+        correct: isCorrect,
+        phase: 'evaluation',
+        time: new Date().toISOString()
+    });
+
+    // 피드백 표시
+    const feedbackEl = document.getElementById('feedback-eval');
+    const labelText = labelToText(track.label);
+
+    if (isCorrect) {
+        playCorrectSound();
+        feedbackEl.className = 'feedback correct';
+        feedbackEl.innerHTML = `✓ 정답! 이 음악은 <strong>${labelText}</strong>입니다.`;
+    } else {
+        playWrongSound();
+        feedbackEl.className = 'feedback wrong';
+        feedbackEl.innerHTML = `✗ 틀렸습니다. 정답은 <strong>${labelText}</strong>입니다.`;
+    }
+    feedbackEl.classList.remove('hidden');
+
+    // 정답 버튼 표시
+    const correctBtnClass = track.label === LABELS.AI
+        ? '#screen-evaluation .btn-choice:first-child'
+        : '#screen-evaluation .btn-choice:last-child';
+    document.querySelector(correctBtnClass).classList.add('correct');
+
+    document.getElementById('btn-next-eval').classList.remove('hidden');
+}
+
+function nextEvalQuestion() {
+    state.evalIndex++;
+    if (state.evalIndex >= CONFIG.evaluationQuestions) {
+        // 워밍업 완료 → Stage 1 인트로
+        startStageSystem();
+    } else {
+        loadEvalQuestion();
+    }
+}
+
+// ============================================================================
+// Stage System
+// ============================================================================
+
+function startStageSystem() {
+    // 게임 상태 초기화
+    state.currentStageIndex = 0;
+    state.lives = CONFIG.maxLives;
     state.score = 0;
     state.correctCount = 0;
     state.wrongCount = 0;
     state.streak = 0;
     state.maxStreak = 0;
     state.answers = [];
+    state.stageResults = [];
     state.aiCorrect = 0;
     state.aiTotal = 0;
     state.realCorrect = 0;
     state.realTotal = 0;
 
-    // Select random 30 tracks (15 AI + 15 Real for balance)
-    const aiTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.AI)).slice(0, 15);
-    const realTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.REAL)).slice(0, 15);
-    state.selectedTracks = shuffleArray([...aiTracks, ...realTracks]);
+    showStageIntro();
+}
+
+function showStageIntro() {
+    const stage = CONFIG.stages[state.currentStageIndex];
+
+    document.getElementById('stage-intro-number').textContent = `STAGE ${stage.id}`;
+    document.getElementById('stage-intro-name').textContent = stage.name;
+    document.getElementById('stage-intro-desc').textContent = stage.desc;
+    document.getElementById('stage-intro-condition').innerHTML =
+        `<span>📋 ${stage.questions}문제</span><span>⭐ 기본 ${stage.pointBase}점</span>` +
+        (stage.clearBonus ? `<span>🏆 클리어 보너스 ${stage.clearBonus}점</span>` : '');
+
+    // 라이프 표시
+    updateLivesDisplay('stage-intro-lives');
+
+    showScreen('stage-intro');
+}
+
+function startStage() {
+    const stage = CONFIG.stages[state.currentStageIndex];
+    state.stageQuestionIndex = 0;
+
+    // 스테이지용 트랙 선택
+    state.stageTracks = selectTracksForStage(stage);
 
     showScreen('game');
-    updateUI();
-    loadQuestion();
+    updateGameUI();
+    loadGameQuestion();
 }
 
-function loadQuestion() {
-    const track = state.selectedTracks[state.currentQuestion];
-    state.currentTrack = track;
+function selectTracksForStage(stage) {
+    // 이미 사용된 트랙 ID 수집
+    const usedIds = new Set([
+        ...state.evalAnswers.map(a => a.trackId),
+        ...state.answers.map(a => a.trackId)
+    ]);
 
-    loadAudio(track);
-    resetChoices();
-    hideFeedback();
-    document.getElementById('btn-next').classList.add('hidden');
+    let candidates;
+
+    if (stage.adversarial) {
+        // Boss: adversarial_score 높은 순으로 사용 가능한 트랙
+        candidates = audioPool
+            .filter(t => t.adversarial_score != null && t.adversarial_score > 0 && !usedIds.has(t.id))
+            .sort((a, b) => b.adversarial_score - a.adversarial_score);
+
+        if (candidates.length < stage.questions) {
+            // 부족하면 일반 트랙으로 채움
+            const extra = audioPool.filter(t => !usedIds.has(t.id) && !candidates.find(c => c.id === t.id));
+            candidates = [...candidates, ...shuffleArray(extra)];
+        }
+    } else {
+        candidates = audioPool.filter(t => !usedIds.has(t.id));
+    }
+
+    // AI/Real 균형 (절반씩)
+    const aiCount = Math.ceil(stage.questions / 2);
+    const realCount = stage.questions - aiCount;
+
+    const aiCandidates = shuffleArray(candidates.filter(t => t.label === LABELS.AI));
+    const realCandidates = shuffleArray(candidates.filter(t => t.label === LABELS.REAL));
+
+    const selected = [
+        ...aiCandidates.slice(0, aiCount),
+        ...realCandidates.slice(0, realCount)
+    ];
+
+    // 부족하면 가능한 만큼 채움
+    if (selected.length < stage.questions) {
+        const remaining = shuffleArray(candidates.filter(t => !selected.find(s => s.id === t.id)));
+        selected.push(...remaining.slice(0, stage.questions - selected.length));
+    }
+
+    return shuffleArray(selected);
 }
 
-function loadAudio(track) {
+// ============================================================================
+// Audio Loading
+// ============================================================================
+
+function loadAudio(track, variant) {
     stopAudio();
-    audio.src = CONFIG.audioBasePath + track.file;
+
+    let filePath;
+    if (variant === 'original' || !variant || !track.variants || !track.variants[variant]) {
+        filePath = track.file;
+    } else {
+        filePath = track.variants[variant];
+    }
+
+    // activeFile 저장 (디버그 용도)
+    track._activeFile = filePath;
+    audio.src = CONFIG.audioBasePath + filePath;
     audio.load();
 
-    // Debug: 파일명 표시 (D키로 토글)
     updateDebugInfo(track);
 }
 
-function updateDebugInfo(track) {
-    const source = track ? (track.source || track.file) : '';
-    const label = track ? (track.label === LABELS.AI ? 'AI' : 'REAL') : '';
-    const text = track ? `[${label}] ${source}` : '';
+function loadGameQuestion() {
+    const stage = CONFIG.stages[state.currentStageIndex];
+    const track = state.stageTracks[state.stageQuestionIndex];
+    state.currentTrack = track;
 
-    // 연습모드용
-    const debugEl = document.getElementById('debug-info');
-    if (debugEl) {
-        debugEl.textContent = text;
-        debugEl.style.display = debugMode ? 'block' : 'none';
-    }
-
-    // 게임모드용
-    const debugElGame = document.getElementById('debug-info-game');
-    if (debugElGame) {
-        debugElGame.textContent = text;
-        debugElGame.style.display = debugMode ? 'block' : 'none';
-    }
-}
-
-function onAudioLoaded() {
-    const totalTime = formatTime(audio.duration);
-    if (state.mode === 'practice') {
-        document.getElementById('time-total-practice').textContent = totalTime;
-        document.getElementById('time-current-practice').textContent = '0:00';
-    } else {
-        document.getElementById('time-total').textContent = totalTime;
-        document.getElementById('time-current').textContent = '0:00';
-    }
-    // Auto-play when audio is loaded
-    playAudio();
+    loadAudio(track, stage.variant);
+    resetChoices();
+    hideFeedback();
+    document.getElementById('btn-next').classList.add('hidden');
 }
 
 // ============================================================================
@@ -312,8 +473,12 @@ function replayAudio() {
 }
 
 function updatePlayButton(playing) {
-    const btnId = state.mode === 'practice' ? 'btn-play-practice' : 'btn-play-game';
+    let btnId;
+    if (state.mode === 'evaluation') btnId = 'btn-play-eval';
+    else btnId = 'btn-play-game';
+
     const btn = document.getElementById(btnId);
+    if (!btn) return;
     const icon = btn.querySelector('.play-icon');
 
     if (playing) {
@@ -329,13 +494,29 @@ function updateProgress() {
     const progress = (audio.currentTime / audio.duration) * 100;
     const currentTime = formatTime(audio.currentTime);
 
-    if (state.mode === 'practice') {
-        document.querySelector('#screen-practice .waveform-progress').style.width = `${progress}%`;
-        document.getElementById('time-current-practice').textContent = currentTime;
+    if (state.mode === 'evaluation') {
+        const el = document.querySelector('#screen-evaluation .waveform-progress');
+        if (el) el.style.width = `${progress}%`;
+        const timeEl = document.getElementById('time-current-eval');
+        if (timeEl) timeEl.textContent = currentTime;
     } else {
-        document.getElementById('waveform-progress').style.width = `${progress}%`;
-        document.getElementById('time-current').textContent = currentTime;
+        const el = document.getElementById('waveform-progress');
+        if (el) el.style.width = `${progress}%`;
+        const timeEl = document.getElementById('time-current');
+        if (timeEl) timeEl.textContent = currentTime;
     }
+}
+
+function onAudioLoaded() {
+    const totalTime = formatTime(audio.duration);
+    if (state.mode === 'evaluation') {
+        document.getElementById('time-total-eval').textContent = totalTime;
+        document.getElementById('time-current-eval').textContent = '0:00';
+    } else {
+        document.getElementById('time-total').textContent = totalTime;
+        document.getElementById('time-current').textContent = '0:00';
+    }
+    playAudio();
 }
 
 function onAudioEnded() {
@@ -350,6 +531,23 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function updateDebugInfo(track) {
+    const source = track ? (track._activeFile || track.file) : '';
+    const label = track ? (track.label === LABELS.AI ? 'AI' : 'REAL') : '';
+    const text = track ? `[${label}] ${source}` : '';
+
+    const debugEl = document.getElementById('debug-info');
+    if (debugEl) {
+        debugEl.textContent = text;
+        debugEl.style.display = debugMode ? 'block' : 'none';
+    }
+    const debugElGame = document.getElementById('debug-info-game');
+    if (debugElGame) {
+        debugElGame.textContent = text;
+        debugElGame.style.display = debugMode ? 'block' : 'none';
+    }
+}
+
 // ============================================================================
 // Answer Handling
 // ============================================================================
@@ -360,41 +558,41 @@ function submitAnswer(answer) {
     const track = state.currentTrack;
     const isCorrect = answerToLabel(answer) === track.label;
 
-    // Disable buttons
     disableChoices();
 
-    // Mark selected button
-    const btnId = answer === 'ai' ? 'btn-ai' : 'btn-real';
-    document.getElementById(btnId).classList.add('selected');
-
-    if (state.mode === 'practice') {
-        showPracticeFeedback(isCorrect, track.label);
+    if (state.mode === 'evaluation') {
+        processEvalAnswer(answer, isCorrect, track);
     } else {
         processGameAnswer(answer, isCorrect, track);
     }
 }
 
 function processGameAnswer(answer, isCorrect, track) {
-    // Update stats
+    const stage = CONFIG.stages[state.currentStageIndex];
+
     if (isCorrect) {
         state.correctCount++;
         state.streak++;
-        if (state.streak > state.maxStreak) {
-            state.maxStreak = state.streak;
-        }
+        if (state.streak > state.maxStreak) state.maxStreak = state.streak;
 
-        // Calculate points
         const streakBonus = Math.min(state.streak * CONFIG.streakBonus, CONFIG.maxStreakBonus);
-        const points = CONFIG.basePoints + streakBonus;
+        const points = stage.pointBase + streakBonus;
         state.score += points;
 
+        playCorrectSound();
         showScorePopup(`+${points}`);
     } else {
         state.wrongCount++;
         state.streak = 0;
+        state.lives--;
+
+        playWrongSound();
+
+        // 라이프 감소 애니메이션
+        animateLifeLost();
     }
 
-    // Track accuracy by type
+    // AI/Real 정확도 추적
     if (track.label === LABELS.AI) {
         state.aiTotal++;
         if (isCorrect) state.aiCorrect++;
@@ -403,20 +601,22 @@ function processGameAnswer(answer, isCorrect, track) {
         if (isCorrect) state.realCorrect++;
     }
 
-    // Save answer
     state.answers.push({
         trackId: track.id,
         label: track.label,
         answer: answer,
         correct: isCorrect,
+        stageId: stage.id,
+        stageName: stage.name,
+        variant: stage.variant,
         time: new Date().toISOString()
     });
 
-    // Show feedback
-    showFeedback(isCorrect, track.label);
-    updateUI();
+    // 피드백 표시
+    showGameFeedback(isCorrect, track.label, stage);
+    updateGameUI();
 
-    // Show correct answer on buttons
+    // 정답/오답 버튼 표시
     const correctBtnId = track.label === LABELS.AI ? 'btn-ai' : 'btn-real';
     document.getElementById(correctBtnId).classList.add('correct');
     if (!isCorrect) {
@@ -427,49 +627,28 @@ function processGameAnswer(answer, isCorrect, track) {
     document.getElementById('btn-next').classList.remove('hidden');
 }
 
-function showPracticeFeedback(isCorrect, correctLabel) {
-    const feedbackEl = document.getElementById('feedback-practice');
-    const labelText = labelToText(correctLabel);
-
-    // 효과음 재생
-    if (isCorrect) {
-        playCorrectSound();
-        feedbackEl.className = 'feedback correct';
-        feedbackEl.innerHTML = `✓ 정답! 이 음악은 <strong>${labelText}</strong>입니다.`;
-    } else {
-        playWrongSound();
-        feedbackEl.className = 'feedback wrong';
-        feedbackEl.innerHTML = `✗ 틀렸습니다. 정답은 <strong>${labelText}</strong>입니다.`;
-    }
-    feedbackEl.classList.remove('hidden');
-
-    // Show correct answer
-    const correctBtnClass = correctLabel === LABELS.AI ? '#screen-practice .btn-choice:first-child' : '#screen-practice .btn-choice:last-child';
-    document.querySelector(correctBtnClass).classList.add('correct');
-
-    document.getElementById('btn-next-practice').classList.remove('hidden');
-}
-
-function showFeedback(isCorrect, correctLabel) {
+function showGameFeedback(isCorrect, correctLabel, stage) {
     const feedbackEl = document.getElementById('feedback');
     const labelText = labelToText(correctLabel);
 
-    // 효과음 재생
     if (isCorrect) {
-        playCorrectSound();
+        const streakBonus = Math.min(state.streak * CONFIG.streakBonus, CONFIG.maxStreakBonus);
+        const points = stage.pointBase + streakBonus;
         feedbackEl.className = 'feedback correct';
-        feedbackEl.innerHTML = `✓ 정답! +${CONFIG.basePoints + Math.min(state.streak * CONFIG.streakBonus, CONFIG.maxStreakBonus)}점 ${state.streak > 1 ? `(${state.streak}연속!)` : ''}`;
+        feedbackEl.innerHTML = `✓ 정답! +${points}점 ${state.streak > 1 ? `(${state.streak}연속!)` : ''}`;
     } else {
-        playWrongSound();
         feedbackEl.className = 'feedback wrong';
-        feedbackEl.innerHTML = `✗ 정답은 <strong>${labelText}</strong>입니다.`;
+        feedbackEl.innerHTML = `✗ 정답은 <strong>${labelText}</strong>입니다. ❤️ -1`;
     }
     feedbackEl.classList.remove('hidden');
 }
 
 function hideFeedback() {
-    document.getElementById('feedback').classList.add('hidden');
-    document.getElementById('feedback-practice').classList.add('hidden');
+    const ids = ['feedback', 'feedback-eval'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
 }
 
 function showScorePopup(text) {
@@ -477,7 +656,6 @@ function showScorePopup(text) {
     popup.className = 'score-popup';
     popup.textContent = text;
     document.body.appendChild(popup);
-
     setTimeout(() => popup.remove(), 500);
 }
 
@@ -485,11 +663,19 @@ function showScorePopup(text) {
 // UI Updates
 // ============================================================================
 
-function updateUI() {
-    // Progress
-    const progress = ((state.currentQuestion + 1) / CONFIG.totalQuestions) * 100;
+function updateGameUI() {
+    const stage = CONFIG.stages[state.currentStageIndex];
+
+    // Stage badge
+    document.getElementById('stage-badge').textContent = `Stage ${stage.id}: ${stage.name}`;
+
+    // Progress (스테이지 내)
+    const progress = ((state.stageQuestionIndex + 1) / stage.questions) * 100;
     document.getElementById('progress-fill').style.width = `${progress}%`;
-    document.getElementById('question-current').textContent = state.currentQuestion + 1;
+    document.getElementById('question-current').textContent = `${state.stageQuestionIndex + 1}`;
+
+    // Lives
+    updateLivesDisplay('lives-display');
 
     // Score
     document.getElementById('score').textContent = state.score;
@@ -498,6 +684,27 @@ function updateUI() {
     document.getElementById('correct-count').textContent = state.correctCount;
     document.getElementById('wrong-count').textContent = state.wrongCount;
     document.getElementById('streak').textContent = state.streak;
+}
+
+function updateLivesDisplay(containerId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    let html = '';
+    for (let i = 0; i < CONFIG.maxLives; i++) {
+        if (i < state.lives) {
+            html += '<span class="life">❤️</span>';
+        } else {
+            html += '<span class="life lost">🖤</span>';
+        }
+    }
+    el.innerHTML = html;
+}
+
+function animateLifeLost() {
+    const livesEl = document.getElementById('lives-display');
+    if (!livesEl) return;
+    livesEl.classList.add('shake');
+    setTimeout(() => livesEl.classList.remove('shake'), 500);
 }
 
 function resetChoices() {
@@ -518,49 +725,172 @@ function disableChoices() {
 // ============================================================================
 
 function nextQuestion() {
-    if (state.mode === 'practice') {
-        state.practiceIndex++;
-        if (state.practiceIndex >= CONFIG.practiceQuestions) {
-            // Practice complete, start main game
-            startMainGame();
-        } else {
-            loadPracticeQuestion();
-        }
+    if (state.mode === 'evaluation') {
+        nextEvalQuestion();
+        return;
+    }
+
+    // Game mode: 라이프 체크
+    if (state.lives <= 0) {
+        handleGameOver();
+        return;
+    }
+
+    const stage = CONFIG.stages[state.currentStageIndex];
+    state.stageQuestionIndex++;
+
+    if (state.stageQuestionIndex >= stage.questions) {
+        // 스테이지 클리어!
+        completeStage(stage);
     } else {
-        state.currentQuestion++;
-        if (state.currentQuestion >= CONFIG.totalQuestions) {
-            showResults();
-        } else {
-            loadQuestion();
-        }
+        loadGameQuestion();
     }
 }
 
-// ============================================================================
-// Results
-// ============================================================================
+function completeStage(stage) {
+    // 스테이지 결과 기록
+    const stageCorrect = state.answers
+        .filter(a => a.stageId === stage.id && a.correct).length;
 
-async function showResults() {
-    showScreen('results');
+    // 클리어 보너스
+    state.score += stage.clearBonus;
+    showScorePopup(`+${stage.clearBonus} CLEAR!`);
 
-    const accuracy = (state.correctCount / CONFIG.totalQuestions) * 100;
+    state.stageResults.push({
+        stageId: stage.id,
+        name: stage.name,
+        cleared: true,
+        correct: stageCorrect,
+        total: stage.questions,
+        score: stage.clearBonus
+    });
+
+    // 다음 스테이지 확인
+    state.currentStageIndex++;
+    if (state.currentStageIndex >= CONFIG.stages.length) {
+        // All Clear!
+        handleAllClear();
+    } else {
+        showStageIntro();
+    }
+}
+
+function handleGameOver() {
+    const stage = CONFIG.stages[state.currentStageIndex];
+
+    // 현재 스테이지 결과 기록 (미완료)
+    const stageCorrect = state.answers
+        .filter(a => a.stageId === stage.id && a.correct).length;
+    const stageTotal = state.answers
+        .filter(a => a.stageId === stage.id).length;
+
+    state.stageResults.push({
+        stageId: stage.id,
+        name: stage.name,
+        cleared: false,
+        correct: stageCorrect,
+        total: stageTotal,
+        score: 0
+    });
+
+    // 나머지 스테이지는 locked
+    for (let i = state.currentStageIndex + 1; i < CONFIG.stages.length; i++) {
+        state.stageResults.push({
+            stageId: CONFIG.stages[i].id,
+            name: CONFIG.stages[i].name,
+            cleared: false,
+            correct: 0,
+            total: 0,
+            score: 0,
+            locked: true
+        });
+    }
+
+    // Game Over 화면 표시
+    document.getElementById('gameover-stage').textContent = `Stage ${stage.id}: ${stage.name}에서 탈락!`;
+    document.getElementById('gameover-score').textContent = state.score;
+
+    renderStageSummary('gameover-stage-summary');
+
+    showScreen('game-over');
+
+    // 자동 제출 + 리더보드
+    autoSubmitAndShowLeaderboard('gameover');
+}
+
+async function handleAllClear() {
+    // 남은 라이프 보너스
+    const lifeBonus = state.lives * CONFIG.lifeBonus;
+    state.score += lifeBonus;
+    if (lifeBonus > 0) showScorePopup(`+${lifeBonus} LIFE BONUS!`);
+
+    // 결과 화면
+    const totalQuestions = CONFIG.stages.reduce((sum, s) => sum + s.questions, 0);
+    const accuracy = totalQuestions > 0 ? (state.correctCount / totalQuestions) * 100 : 0;
     const aiAccuracy = state.aiTotal > 0 ? (state.aiCorrect / state.aiTotal) * 100 : 0;
     const realAccuracy = state.realTotal > 0 ? (state.realCorrect / state.realTotal) * 100 : 0;
 
     document.getElementById('final-score').textContent = state.score;
     document.getElementById('result-accuracy').textContent = `${accuracy.toFixed(0)}%`;
-    document.getElementById('result-correct').textContent = `${state.correctCount}/${CONFIG.totalQuestions}`;
+    document.getElementById('result-correct').textContent = `${state.correctCount}/${totalQuestions}`;
     document.getElementById('result-streak').textContent = state.maxStreak;
+    document.getElementById('result-lives').textContent = `❤️×${state.lives}`;
     document.getElementById('ai-accuracy').textContent = `${aiAccuracy.toFixed(0)}%`;
     document.getElementById('real-accuracy').textContent = `${realAccuracy.toFixed(0)}%`;
 
-    // Show rank
     showRank(accuracy);
+    renderStageSummary('results-stage-summary');
 
-    // Save to leaderboard and display
-    await saveToLeaderboard();
-    await displayLeaderboard();
+    showScreen('results');
+
+    await autoSubmitAndShowLeaderboard('results');
 }
+
+// ============================================================================
+// Stage Summary Rendering
+// ============================================================================
+
+function renderStageSummary(containerId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    let html = '<h3>스테이지별 결과</h3>';
+    CONFIG.stages.forEach((stage, idx) => {
+        const result = state.stageResults.find(r => r.stageId === stage.id);
+        let cls = 'locked';
+        let status = '🔒';
+        let detail = '';
+
+        if (result) {
+            if (result.locked) {
+                cls = 'locked';
+                status = '🔒';
+            } else if (result.cleared) {
+                cls = 'cleared';
+                status = '✅';
+                detail = `${result.correct}/${result.total} (+${result.score})`;
+            } else {
+                cls = 'failed';
+                status = '💀';
+                detail = `${result.correct}/${result.total}`;
+            }
+        }
+
+        html += `
+            <div class="stage-summary-row ${cls}">
+                <span class="stage-summary-status">${status}</span>
+                <span class="stage-summary-name">Stage ${stage.id}: ${stage.name}</span>
+                <span class="stage-summary-detail">${detail}</span>
+            </div>
+        `;
+    });
+
+    el.innerHTML = html;
+}
+
+// ============================================================================
+// Results & Rank
+// ============================================================================
 
 function showRank(accuracy) {
     const rankEl = document.getElementById('rank-display');
@@ -593,29 +923,54 @@ function showRank(accuracy) {
 // Data Submission
 // ============================================================================
 
-const API_URL = 'https://survey.intrect.io';
+function buildSubmitPayload(demographicsPrefix) {
+    const totalQuestions = CONFIG.stages.reduce((sum, s) => sum + s.questions, 0);
+    const questionsAnswered = state.answers.length;
+    const accuracy = questionsAnswered > 0 ? (state.correctCount / questionsAnswered) * 100 : 0;
+    const maxStage = Math.min(state.currentStageIndex + 1, CONFIG.stages.length);
 
-async function submitResults() {
-    const results = {
+    const prefix = demographicsPrefix || '';
+    const musicExpId = prefix ? `${prefix}-music-experience` : 'music-experience';
+    const aiExpId = prefix ? `${prefix}-ai-experience` : 'ai-experience';
+    const criteriaId = prefix ? `${prefix}-criteria` : 'criteria';
+
+    return {
         nickname: state.nickname,
         email: state.email,
         timestamp: new Date().toISOString(),
         duration: Math.round((new Date() - state.startTime) / 1000),
         score: state.score,
-        accuracy: (state.correctCount / CONFIG.totalQuestions) * 100,
+        accuracy: accuracy,
         correctCount: state.correctCount,
         maxStreak: state.maxStreak,
         aiAccuracy: state.aiTotal > 0 ? (state.aiCorrect / state.aiTotal) * 100 : 0,
         realAccuracy: state.realTotal > 0 ? (state.realCorrect / state.realTotal) * 100 : 0,
+        maxStage: maxStage,
+        livesRemaining: state.lives,
+        isGameOver: state.lives <= 0,
+        stageResults: state.stageResults,
         demographics: {
-            musicExperience: document.getElementById('music-experience').value,
-            aiExperience: document.getElementById('ai-experience').value,
-            criteria: document.getElementById('criteria').value
+            musicExperience: document.getElementById(musicExpId)?.value || '',
+            aiExperience: document.getElementById(aiExpId)?.value || '',
+            criteria: document.getElementById(criteriaId)?.value || ''
         },
-        answers: state.answers
+        answers: [...state.evalAnswers, ...state.answers]
     };
+}
 
-    // Submit to server
+async function submitResults() {
+    const results = buildSubmitPayload('');
+    await doSubmit(results);
+    showScreen('thankyou');
+}
+
+async function submitResultsFromGameOver() {
+    const results = buildSubmitPayload('gameover');
+    await doSubmit(results);
+    showScreen('thankyou');
+}
+
+async function doSubmit(results) {
     try {
         const response = await fetch(`${API_URL}/api/submit`, {
             method: 'POST',
@@ -629,40 +984,48 @@ async function submitResults() {
         console.error('Failed to submit results:', e);
     }
 
-    // Save to localStorage as backup
-    const savedResults = JSON.parse(localStorage.getItem('surveyResults') || '[]');
-    savedResults.push(results);
-    localStorage.setItem('surveyResults', JSON.stringify(savedResults));
-
-    showScreen('thankyou');
+    // localStorage 백업
+    const saved = JSON.parse(localStorage.getItem('surveyResults') || '[]');
+    saved.push(results);
+    localStorage.setItem('surveyResults', JSON.stringify(saved));
 }
 
-function downloadResults(results) {
-    const dataStr = JSON.stringify(results, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+async function autoSubmitAndShowLeaderboard(prefix) {
+    // 제출 (인구통계 없이 먼저)
+    const results = buildSubmitPayload(prefix);
+    try {
+        await fetch(`${API_URL}/api/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(results)
+        });
+    } catch (e) {
+        console.log('Auto-submit failed (offline)');
+    }
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `survey_result_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 리더보드 표시
+    const leaderboardId = prefix === 'gameover' ? 'gameover-leaderboard' : 'leaderboard';
+    const percentileId = prefix === 'gameover' ? 'gameover-percentile-display' : 'percentile-display';
+    await displayLeaderboardIn(leaderboardId, percentileId);
 }
+
+// ============================================================================
+// Sharing
+// ============================================================================
 
 function shareResults() {
-    const accuracy = (state.correctCount / CONFIG.totalQuestions) * 100;
-    const text = `나는 AI vs Real Music 테스트에서 ${accuracy.toFixed(0)}% 정확도로 ${state.score}점을 얻었다! 🎵\n당신도 도전해보세요!`;
+    const totalQuestions = CONFIG.stages.reduce((sum, s) => sum + s.questions, 0);
+    const accuracy = state.answers.length > 0
+        ? ((state.correctCount / state.answers.length) * 100).toFixed(0) : 0;
+    const clearedStages = state.stageResults.filter(r => r.cleared).length;
+
+    const text = `🎵 AI vs Real Music 챌린지\n` +
+        `${state.score}점 | ${accuracy}% 정확도 | Stage ${clearedStages}/${CONFIG.stages.length} 클리어\n` +
+        `당신도 도전해보세요!`;
 
     if (navigator.share) {
-        navigator.share({
-            title: 'AI vs Real Music',
-            text: text,
-            url: window.location.href
-        });
+        navigator.share({ title: 'AI vs Real Music', text, url: window.location.href });
     } else {
-        // Fallback: copy to clipboard
         navigator.clipboard.writeText(text + '\n' + window.location.href)
             .then(() => alert('결과가 클립보드에 복사되었습니다!'));
     }
@@ -676,29 +1039,25 @@ function copyLink() {
 function restartGame() {
     state = {
         mode: 'welcome',
-        currentQuestion: 0,
-        practiceIndex: 0,
-        nickname: '',
-        email: '',
-        score: 0,
-        correctCount: 0,
-        wrongCount: 0,
-        streak: 0,
-        maxStreak: 0,
-        answers: [],
-        selectedTracks: [],
-        currentTrack: null,
-        isPlaying: false,
-        startTime: null,
-        aiCorrect: 0,
-        aiTotal: 0,
-        realCorrect: 0,
-        realTotal: 0,
+        nickname: state.nickname,
+        email: state.email,
+        isReturningUser: state.isReturningUser,
+        evalIndex: 0, evalTracks: [], evalAnswers: [],
+        currentStageIndex: 0, stageQuestionIndex: 0,
+        lives: CONFIG.maxLives,
+        score: 0, correctCount: 0, wrongCount: 0,
+        streak: 0, maxStreak: 0,
+        answers: [], stageResults: [], stageTracks: [],
+        currentTrack: null, isPlaying: false, startTime: null,
+        aiCorrect: 0, aiTotal: 0, realCorrect: 0, realTotal: 0,
     };
-    // Clear input fields
-    document.getElementById('user-nickname').value = '';
+
+    if (!state.isReturningUser) {
+        document.getElementById('user-nickname').value = '';
+    }
     document.getElementById('user-email').value = '';
     showScreen('welcome');
+    displayWelcomeLeaderboard();
 }
 
 // ============================================================================
@@ -714,44 +1073,51 @@ function shuffleArray(array) {
     return arr;
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ============================================================================
 // Leaderboard
 // ============================================================================
 
-// Initial placeholder users (seeded data)
+// 시드 리더보드: 실제 참여자 성적(최고 ASI 915점/Stage3) 기반 80% + placeholder 20%
 const SEED_LEADERBOARD = [
-    { nickname: "골든이어", score: 520, accuracy: 83, correctCount: 25, maxStreak: 8, timestamp: "2026-02-10T09:30:00Z" },
-    { nickname: "음악덕후", score: 485, accuracy: 80, correctCount: 24, maxStreak: 7, timestamp: "2026-02-10T11:15:00Z" },
-    { nickname: "프로듀서K", score: 460, accuracy: 77, correctCount: 23, maxStreak: 6, timestamp: "2026-02-09T14:20:00Z" },
-    { nickname: "멜로디", score: 435, accuracy: 73, correctCount: 22, maxStreak: 5, timestamp: "2026-02-10T16:45:00Z" },
-    { nickname: "비트메이커", score: 410, accuracy: 70, correctCount: 21, maxStreak: 5, timestamp: "2026-02-09T10:00:00Z" },
-    { nickname: "사운드헌터", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, timestamp: "2026-02-10T13:30:00Z" },
-    { nickname: "DJ_Seoul", score: 355, accuracy: 63, correctCount: 19, maxStreak: 4, timestamp: "2026-02-08T18:00:00Z" },
-    { nickname: "뮤직러버", score: 320, accuracy: 60, correctCount: 18, maxStreak: 3, timestamp: "2026-02-10T20:15:00Z" },
-    { nickname: "청음왕", score: 290, accuracy: 57, correctCount: 17, maxStreak: 3, timestamp: "2026-02-09T09:45:00Z" },
-    { nickname: "음감테스터", score: 265, accuracy: 53, correctCount: 16, maxStreak: 3, timestamp: "2026-02-10T12:00:00Z" },
-    { nickname: "랜덤리스너", score: 230, accuracy: 50, correctCount: 15, maxStreak: 2, timestamp: "2026-02-08T15:30:00Z" },
-    { nickname: "초보청취자", score: 195, accuracy: 47, correctCount: 14, maxStreak: 2, timestamp: "2026-02-10T17:00:00Z" },
+    // placeholder (20%) — 도달 가능한 목표치
+    { nickname: "골든이어", score: 1050, accuracy: 87, correctCount: 26, maxStreak: 10, maxStage: 5, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T09:30:00Z" },
+    { nickname: "프로듀서K", score: 820, accuracy: 80, correctCount: 24, maxStreak: 8, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T14:20:00Z" },
+    // 실제 참여자 성적 기반 (80%)
+    { nickname: "비트메이커", score: 680, accuracy: 77, correctCount: 23, maxStreak: 7, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T10:00:00Z" },
+    { nickname: "사운드헌터", score: 540, accuracy: 73, correctCount: 22, maxStreak: 6, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T13:30:00Z" },
+    { nickname: "DJ_Seoul", score: 450, accuracy: 70, correctCount: 21, maxStreak: 5, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T18:00:00Z" },
+    { nickname: "뮤직러버", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T20:15:00Z" },
+    { nickname: "멜로디", score: 320, accuracy: 63, correctCount: 19, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T16:45:00Z" },
+    { nickname: "청음왕", score: 260, accuracy: 60, correctCount: 18, maxStreak: 3, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T09:45:00Z" },
+    { nickname: "음감테스터", score: 180, accuracy: 57, correctCount: 17, maxStreak: 3, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T12:00:00Z" },
+    { nickname: "랜덤리스너", score: 120, accuracy: 53, correctCount: 16, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T15:30:00Z" },
+    { nickname: "초보청취자", score: 60, accuracy: 47, correctCount: 14, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T17:00:00Z" },
 ];
 
 async function getLeaderboard() {
-    // Try to fetch from API first
     try {
         const response = await fetch(`${API_URL}/api/leaderboard`);
         if (response.ok) {
             const apiData = await response.json();
-            // API returns snake_case, convert to camelCase
             const converted = apiData.map(entry => ({
                 nickname: entry.nickname,
                 score: entry.score,
                 accuracy: entry.accuracy,
                 correctCount: entry.correct_count,
                 maxStreak: entry.max_streak,
+                maxStage: entry.max_stage || 0,
+                livesRemaining: entry.lives_remaining || 0,
+                is_game_over: entry.is_game_over || 0,
                 timestamp: entry.timestamp
             }));
-            // Merge with seed data and sort
+
             const merged = [...converted, ...SEED_LEADERBOARD];
-            // Remove duplicates by nickname (keep higher score)
             const uniqueMap = new Map();
             merged.forEach(entry => {
                 const existing = uniqueMap.get(entry.nickname);
@@ -759,51 +1125,62 @@ async function getLeaderboard() {
                     uniqueMap.set(entry.nickname, entry);
                 }
             });
+
             const leaderboard = Array.from(uniqueMap.values());
-            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard.sort((a, b) => {
+                if (b.maxStage !== a.maxStage) return b.maxStage - a.maxStage;
+                return b.score - a.score;
+            });
             return leaderboard.slice(0, 100);
         }
     } catch (e) {
-        console.error('Failed to fetch leaderboard from API:', e);
+        console.error('Leaderboard fetch failed:', e);
     }
 
-    // Fallback to localStorage/seed
     let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || 'null');
-    if (leaderboard === null) {
+    if (!leaderboard) {
         leaderboard = [...SEED_LEADERBOARD];
         localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
     }
     return leaderboard;
 }
 
-async function saveToLeaderboard() {
+async function displayWelcomeLeaderboard() {
+    const container = document.getElementById('welcome-leaderboard-body');
+    if (!container) return;
+
     const leaderboard = await getLeaderboard();
-    const accuracy = (state.correctCount / CONFIG.totalQuestions) * 100;
+    if (leaderboard.length === 0) {
+        container.innerHTML = '<p class="no-data">아직 기록이 없습니다.</p>';
+        return;
+    }
 
-    const entry = {
-        nickname: state.nickname,
-        score: state.score,
-        accuracy: accuracy,
-        correctCount: state.correctCount,
-        maxStreak: state.maxStreak,
-        timestamp: new Date().toISOString()
-    };
+    const top5 = leaderboard.slice(0, 5);
+    let html = '<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>닉네임</th><th>점수</th><th>스테이지</th></tr></thead><tbody>';
 
-    leaderboard.push(entry);
+    top5.forEach((entry, index) => {
+        const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+        const stageText = entry.maxStage >= CONFIG.stages.length
+            ? 'ALL CLEAR' : `Stage ${entry.maxStage || '?'}`;
+        html += `
+            <tr>
+                <td>${rankIcon}</td>
+                <td>${escapeHtml(entry.nickname)}</td>
+                <td>${entry.score}</td>
+                <td>${stageText}</td>
+            </tr>
+        `;
+    });
 
-    // Sort by score (descending)
-    leaderboard.sort((a, b) => b.score - a.score);
-
-    // Keep top 100
-    const trimmed = leaderboard.slice(0, 100);
-    localStorage.setItem('leaderboard', JSON.stringify(trimmed));
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
-async function displayLeaderboard() {
-    const leaderboardEl = document.getElementById('leaderboard');
-    const percentileEl = document.getElementById('percentile-display');
+async function displayLeaderboardIn(leaderboardElId, percentileElId) {
+    const leaderboardEl = document.getElementById(leaderboardElId);
+    const percentileEl = document.getElementById(percentileElId);
 
-    // Show loading state
+    if (!leaderboardEl) return;
     leaderboardEl.innerHTML = '<p class="loading">리더보드 불러오는 중...</p>';
 
     const leaderboard = await getLeaderboard();
@@ -813,18 +1190,13 @@ async function displayLeaderboard() {
         return;
     }
 
-    // Find current user's rank
+    // 현재 사용자 순위
     const userRank = leaderboard.findIndex(e =>
-        e.nickname === state.nickname &&
-        e.score === state.score &&
-        e.correctCount === state.correctCount
+        e.nickname === state.nickname && e.score === state.score
     ) + 1;
 
-    // Calculate percentile
-    const percentile = ((leaderboard.length - userRank) / leaderboard.length * 100).toFixed(0);
-
-    // Show percentile
-    if (userRank > 0) {
+    if (percentileEl && userRank > 0) {
+        const percentile = ((leaderboard.length - userRank) / leaderboard.length * 100).toFixed(0);
         percentileEl.innerHTML = `
             <div class="percentile-badge">
                 <span class="percentile-rank">${userRank}위</span>
@@ -833,46 +1205,40 @@ async function displayLeaderboard() {
         `;
     }
 
-    // Build leaderboard HTML (top 10)
     const top10 = leaderboard.slice(0, 10);
-    let html = '<table class="leaderboard-table"><thead><tr><th>#</th><th>닉네임</th><th>점수</th><th>정확도</th></tr></thead><tbody>';
+    let html = '<table class="leaderboard-table"><thead><tr><th>#</th><th>닉네임</th><th>점수</th><th>스테이지</th></tr></thead><tbody>';
 
     top10.forEach((entry, index) => {
-        const isCurrentUser = entry.nickname === state.nickname &&
-                             entry.score === state.score &&
-                             entry.correctCount === state.correctCount;
+        const isCurrentUser = entry.nickname === state.nickname && entry.score === state.score;
         const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+        const stageText = entry.maxStage >= CONFIG.stages.length
+            ? '🎉 ALL CLEAR' : `Stage ${entry.maxStage || '?'}`;
 
         html += `
             <tr class="${isCurrentUser ? 'current-user' : ''}">
                 <td>${rankIcon}</td>
                 <td>${escapeHtml(entry.nickname)}</td>
                 <td>${entry.score}</td>
-                <td>${entry.accuracy.toFixed(0)}%</td>
+                <td>${stageText}</td>
             </tr>
         `;
     });
 
-    // If user is not in top 10, show their position
     if (userRank > 10) {
         const userEntry = leaderboard[userRank - 1];
+        const stageText = userEntry.maxStage >= CONFIG.stages.length
+            ? '🎉 ALL CLEAR' : `Stage ${userEntry.maxStage || '?'}`;
         html += `
             <tr class="separator"><td colspan="4">...</td></tr>
             <tr class="current-user">
                 <td>${userRank}</td>
                 <td>${escapeHtml(userEntry.nickname)}</td>
                 <td>${userEntry.score}</td>
-                <td>${userEntry.accuracy.toFixed(0)}%</td>
+                <td>${stageText}</td>
             </tr>
         `;
     }
 
     html += '</tbody></table>';
     leaderboardEl.innerHTML = html;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
