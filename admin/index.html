@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Music Survey - Admin Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #333;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #2a2a35;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-value.success { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid #2a2a35;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #2a2a35;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid #444;
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #2a2a35;
+        }
+
+        th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-high {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .badge-mid {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .badge-low {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem;
+        }
+
+        .chart-card {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .chart-title {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .bar-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .bar-label {
+            width: 80px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .bar-container {
+            flex: 1;
+            height: 24px;
+            background: #2a2a35;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .bar-value {
+            width: 40px;
+            text-align: right;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .refresh-timer {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Login Screen */
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .login-card {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid #2a2a35;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .login-card h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-card input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .login-card input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .login-error {
+            color: var(--error);
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card">
+            <h2>🔐 Admin Login</h2>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="username" placeholder="Username" autocomplete="username" required>
+                <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">로그인</button>
+                <p id="login-error" class="login-error"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard (hidden until login) -->
+    <div id="admin-dashboard" class="container" style="display: none;">
+        <header>
+            <h1>🎵 AI Music Survey Admin</h1>
+            <div class="status">
+                <span class="status-dot"></span>
+                <span>Live</span>
+                <span class="refresh-timer" id="refresh-timer">30초 후 새로고침</span>
+            </div>
+        </header>
+
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">총 참가자</div>
+                <div class="stat-value" id="total-participants">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">평균 정확도</div>
+                <div class="stat-value success" id="avg-accuracy">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">평균 점수</div>
+                <div class="stat-value" id="avg-score">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">AI 정답률</div>
+                <div class="stat-value warning" id="avg-ai-accuracy">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Real 정답률</div>
+                <div class="stat-value success" id="avg-real-accuracy">-</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">📊 경험별 분포</h2>
+            </div>
+            <div class="charts-grid" id="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">음악 경험</div>
+                    <div class="bar-chart" id="music-exp-chart"></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">AI 음악 경험</div>
+                    <div class="bar-chart" id="ai-exp-chart"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">📋 참가자 목록</h2>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="refreshData()">🔄 새로고침</button>
+                    <button class="btn btn-primary" onclick="exportCSV()">📥 CSV 다운로드</button>
+                </div>
+            </div>
+            <div id="results-table">
+                <div class="loading">데이터 불러오는 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://survey.intrect.io';
+        let refreshInterval;
+        let countdown = 30;
+
+        async function fetchStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/stats`);
+                if (!response.ok) throw new Error('Failed to fetch stats');
+                const stats = await response.json();
+
+                document.getElementById('total-participants').textContent = stats.total_participants || 0;
+                document.getElementById('avg-accuracy').textContent = (stats.avg_accuracy || 0).toFixed(1) + '%';
+                document.getElementById('avg-score').textContent = Math.round(stats.avg_score || 0);
+                document.getElementById('avg-ai-accuracy').textContent = (stats.avg_ai_accuracy || 0).toFixed(1) + '%';
+                document.getElementById('avg-real-accuracy').textContent = (stats.avg_real_accuracy || 0).toFixed(1) + '%';
+
+                // Render charts
+                renderBarChart('music-exp-chart', stats.music_experience || {});
+                renderBarChart('ai-exp-chart', stats.ai_experience || {});
+            } catch (e) {
+                console.error('Failed to fetch stats:', e);
+            }
+        }
+
+        function renderBarChart(elementId, data) {
+            const container = document.getElementById(elementId);
+            const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
+
+            if (Object.keys(data).length === 0) {
+                container.innerHTML = '<div class="empty-state">데이터 없음</div>';
+                return;
+            }
+
+            const labels = {
+                'none': '없음',
+                'casual': '가끔',
+                'regular': '자주',
+                'professional': '전문가',
+                'heard': '들어봄',
+                'used': '사용해봄',
+                'familiar': '잘 앎'
+            };
+
+            container.innerHTML = Object.entries(data).map(([key, value]) => {
+                const pct = (value / total * 100).toFixed(0);
+                return `
+                    <div class="bar-row">
+                        <span class="bar-label">${labels[key] || key}</span>
+                        <div class="bar-container">
+                            <div class="bar-fill" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="bar-value">${value}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function fetchResults() {
+            try {
+                const response = await fetch(`${API_URL}/api/results?limit=100`);
+                if (!response.ok) throw new Error('Failed to fetch results');
+                const results = await response.json();
+
+                if (results.length === 0) {
+                    document.getElementById('results-table').innerHTML =
+                        '<div class="empty-state">아직 참가자가 없습니다.</div>';
+                    return;
+                }
+
+                const html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>닉네임</th>
+                                <th>점수</th>
+                                <th>정확도</th>
+                                <th>AI 정답</th>
+                                <th>Real 정답</th>
+                                <th>연속</th>
+                                <th>시간</th>
+                                <th>음악경험</th>
+                                <th>제출일</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${results.map((r, i) => `
+                                <tr>
+                                    <td>${i + 1}</td>
+                                    <td><strong>${escapeHtml(r.nickname)}</strong></td>
+                                    <td>${r.score}</td>
+                                    <td>
+                                        <span class="badge ${r.accuracy >= 70 ? 'badge-high' : r.accuracy >= 50 ? 'badge-mid' : 'badge-low'}">
+                                            ${r.accuracy.toFixed(1)}%
+                                        </span>
+                                    </td>
+                                    <td>${r.ai_accuracy?.toFixed(1) || '-'}%</td>
+                                    <td>${r.real_accuracy?.toFixed(1) || '-'}%</td>
+                                    <td>${r.max_streak || 0}</td>
+                                    <td>${formatDuration(r.duration)}</td>
+                                    <td>${r.music_experience || '-'}</td>
+                                    <td>${formatDate(r.timestamp)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('results-table').innerHTML = html;
+            } catch (e) {
+                console.error('Failed to fetch results:', e);
+                document.getElementById('results-table').innerHTML =
+                    '<div class="empty-state">데이터를 불러오는데 실패했습니다.</div>';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '-';
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp);
+            return date.toLocaleDateString('ko-KR', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        async function exportCSV() {
+            try {
+                const response = await fetch(`${API_URL}/api/export`);
+                if (!response.ok) throw new Error('Failed to export');
+                const data = await response.json();
+
+                const headers = ['id', 'nickname', 'email', 'score', 'accuracy', 'correct_count',
+                               'max_streak', 'ai_accuracy', 'real_accuracy', 'duration',
+                               'music_experience', 'ai_experience', 'criteria', 'timestamp'];
+
+                let csv = headers.join(',') + '\n';
+                data.forEach(row => {
+                    csv += headers.map(h => {
+                        let val = row[h] || '';
+                        if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+                            val = '"' + val.replace(/"/g, '""') + '"';
+                        }
+                        return val;
+                    }).join(',') + '\n';
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `survey_results_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+            } catch (e) {
+                console.error('Export failed:', e);
+                alert('CSV 다운로드에 실패했습니다.');
+            }
+        }
+
+        function refreshData() {
+            countdown = 30;
+            fetchStats();
+            fetchResults();
+        }
+
+        function updateTimer() {
+            countdown--;
+            if (countdown <= 0) {
+                refreshData();
+            }
+            document.getElementById('refresh-timer').textContent = `${countdown}초 후 새로고침`;
+        }
+
+        // Authentication
+        const CREDENTIALS = {
+            username: 'intrect',
+            // Simple hash of password (not truly secure, but prevents casual access)
+            passwordHash: '5f4dcc3b5aa765d61d8327deb882cf99' // Pre-computed
+        };
+
+        function simpleHash(str) {
+            // Simple string hash for basic protection
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return hash.toString(16);
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === 'intrect' && password === 'Earwire0319!') {
+                sessionStorage.setItem('adminAuth', 'true');
+                showDashboard();
+            } else {
+                document.getElementById('login-error').textContent = '아이디 또는 비밀번호가 틀렸습니다.';
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('admin-dashboard').style.display = 'block';
+            refreshData();
+            setInterval(updateTimer, 1000);
+        }
+
+        function checkAuth() {
+            if (sessionStorage.getItem('adminAuth') === 'true') {
+                showDashboard();
+            }
+        }
+
+        // Initialize - check auth on page load
+        checkAuth();
+    </script>
+</body>
+</html>
