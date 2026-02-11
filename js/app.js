@@ -269,6 +269,8 @@ function onAudioLoaded() {
         document.getElementById('time-total').textContent = totalTime;
         document.getElementById('time-current').textContent = '0:00';
     }
+    // Auto-play when audio is loaded
+    playAudio();
 }
 
 // ============================================================================
