@@ -556,8 +556,8 @@ function showResults() {
     showRank(accuracy);
 
     // Save to leaderboard and display
-    saveToLeaderboard();
-    displayLeaderboard();
+    await saveToLeaderboard();
+    await displayLeaderboard();
 }
 
 function showRank(accuracy) {
@@ -591,7 +591,9 @@ function showRank(accuracy) {
 // Data Submission
 // ============================================================================
 
-function submitResults() {
+const API_URL = 'https://survey.intrect.io';
+
+async function submitResults() {
     const results = {
         nickname: state.nickname,
         email: state.email,
@@ -611,13 +613,24 @@ function submitResults() {
         answers: state.answers
     };
 
-    // Save to localStorage
+    // Submit to server
+    try {
+        const response = await fetch(`${API_URL}/api/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(results)
+        });
+        if (response.ok) {
+            console.log('Results submitted successfully');
+        }
+    } catch (e) {
+        console.error('Failed to submit results:', e);
+    }
+
+    // Save to localStorage as backup
     const savedResults = JSON.parse(localStorage.getItem('surveyResults') || '[]');
     savedResults.push(results);
     localStorage.setItem('surveyResults', JSON.stringify(savedResults));
-
-    // Also offer download
-    downloadResults(results);
 
     showScreen('thankyou');
 }
@@ -719,20 +732,50 @@ const SEED_LEADERBOARD = [
     { nickname: "초보청취자", score: 195, accuracy: 47, correctCount: 14, maxStreak: 2, timestamp: "2026-02-10T17:00:00Z" },
 ];
 
-function getLeaderboard() {
-    let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || 'null');
+async function getLeaderboard() {
+    // Try to fetch from API first
+    try {
+        const response = await fetch(`${API_URL}/api/leaderboard`);
+        if (response.ok) {
+            const apiData = await response.json();
+            // API returns snake_case, convert to camelCase
+            const converted = apiData.map(entry => ({
+                nickname: entry.nickname,
+                score: entry.score,
+                accuracy: entry.accuracy,
+                correctCount: entry.correct_count,
+                maxStreak: entry.max_streak,
+                timestamp: entry.timestamp
+            }));
+            // Merge with seed data and sort
+            const merged = [...converted, ...SEED_LEADERBOARD];
+            // Remove duplicates by nickname (keep higher score)
+            const uniqueMap = new Map();
+            merged.forEach(entry => {
+                const existing = uniqueMap.get(entry.nickname);
+                if (!existing || entry.score > existing.score) {
+                    uniqueMap.set(entry.nickname, entry);
+                }
+            });
+            const leaderboard = Array.from(uniqueMap.values());
+            leaderboard.sort((a, b) => b.score - a.score);
+            return leaderboard.slice(0, 100);
+        }
+    } catch (e) {
+        console.error('Failed to fetch leaderboard from API:', e);
+    }
 
-    // Initialize with seed data if empty
+    // Fallback to localStorage/seed
+    let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || 'null');
     if (leaderboard === null) {
         leaderboard = [...SEED_LEADERBOARD];
         localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
     }
-
     return leaderboard;
 }
 
-function saveToLeaderboard() {
-    const leaderboard = getLeaderboard();
+async function saveToLeaderboard() {
+    const leaderboard = await getLeaderboard();
     const accuracy = (state.correctCount / CONFIG.totalQuestions) * 100;
 
     const entry = {
@@ -754,10 +797,14 @@ function saveToLeaderboard() {
     localStorage.setItem('leaderboard', JSON.stringify(trimmed));
 }
 
-function displayLeaderboard() {
-    const leaderboard = getLeaderboard();
+async function displayLeaderboard() {
     const leaderboardEl = document.getElementById('leaderboard');
     const percentileEl = document.getElementById('percentile-display');
+
+    // Show loading state
+    leaderboardEl.innerHTML = '<p class="loading">리더보드 불러오는 중...</p>';
+
+    const leaderboard = await getLeaderboard();
 
     if (leaderboard.length === 0) {
         leaderboardEl.innerHTML = '<p class="no-data">아직 기록이 없습니다.</p>';
