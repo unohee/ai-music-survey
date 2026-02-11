@@ -703,8 +703,32 @@ function shuffleArray(array) {
 // Leaderboard
 // ============================================================================
 
+// Initial placeholder users (seeded data)
+const SEED_LEADERBOARD = [
+    { nickname: "골든이어", score: 520, accuracy: 83, correctCount: 25, maxStreak: 8, timestamp: "2026-02-10T09:30:00Z" },
+    { nickname: "음악덕후", score: 485, accuracy: 80, correctCount: 24, maxStreak: 7, timestamp: "2026-02-10T11:15:00Z" },
+    { nickname: "프로듀서K", score: 460, accuracy: 77, correctCount: 23, maxStreak: 6, timestamp: "2026-02-09T14:20:00Z" },
+    { nickname: "멜로디", score: 435, accuracy: 73, correctCount: 22, maxStreak: 5, timestamp: "2026-02-10T16:45:00Z" },
+    { nickname: "비트메이커", score: 410, accuracy: 70, correctCount: 21, maxStreak: 5, timestamp: "2026-02-09T10:00:00Z" },
+    { nickname: "사운드헌터", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, timestamp: "2026-02-10T13:30:00Z" },
+    { nickname: "DJ_Seoul", score: 355, accuracy: 63, correctCount: 19, maxStreak: 4, timestamp: "2026-02-08T18:00:00Z" },
+    { nickname: "뮤직러버", score: 320, accuracy: 60, correctCount: 18, maxStreak: 3, timestamp: "2026-02-10T20:15:00Z" },
+    { nickname: "청음왕", score: 290, accuracy: 57, correctCount: 17, maxStreak: 3, timestamp: "2026-02-09T09:45:00Z" },
+    { nickname: "음감테스터", score: 265, accuracy: 53, correctCount: 16, maxStreak: 3, timestamp: "2026-02-10T12:00:00Z" },
+    { nickname: "랜덤리스너", score: 230, accuracy: 50, correctCount: 15, maxStreak: 2, timestamp: "2026-02-08T15:30:00Z" },
+    { nickname: "초보청취자", score: 195, accuracy: 47, correctCount: 14, maxStreak: 2, timestamp: "2026-02-10T17:00:00Z" },
+];
+
 function getLeaderboard() {
-    return JSON.parse(localStorage.getItem('leaderboard') || '[]');
+    let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || 'null');
+
+    // Initialize with seed data if empty
+    if (leaderboard === null) {
+        leaderboard = [...SEED_LEADERBOARD];
+        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+    }
+
+    return leaderboard;
 }
 
 function saveToLeaderboard() {
