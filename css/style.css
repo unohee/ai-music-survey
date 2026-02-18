@@ -1138,3 +1138,28 @@ h1 {
 }
 
 .share-close:hover { border-color: rgba(255, 255, 255, 0.4); }
+
+/* ============================================================================
+   Language Toggle
+   ============================================================================ */
+
+.lang-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s ease;
+}
+
+.lang-toggle:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
