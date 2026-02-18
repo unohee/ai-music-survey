@@ -80,6 +80,17 @@
                         </ul>
                     </div>
                     <div class="about-block">
+                        <h4 data-i18n="dataset_title">Audio Sources</h4>
+                        <p data-i18n-html="dataset_desc">200 tracks (100 AI + 100 Real), each 12-second segments with variants (8s, 4s, 128kbps, 64kbps).</p>
+                        <ul>
+                            <li data-i18n-html="dataset_ai"><strong>AI-generated</strong>: Suno (v3/v4), Udio, Stable Audio — collected from public YouTube uploads and direct platform outputs.</li>
+                            <li data-i18n-html="dataset_real_fma"><strong>Real (FMA)</strong>: <a href="https://github.com/mdeff/fma" target="_blank" rel="noopener">Free Music Archive</a> — ~25K CC-licensed tracks across diverse genres.</li>
+                            <li data-i18n-html="dataset_real_gtzan"><strong>Real (GTZAN)</strong>: <a href="http://marsyas.info/downloads/datasets.html" target="_blank" rel="noopener">GTZAN Genre Collection</a> — 1,000 tracks, 10 genres.</li>
+                            <li data-i18n-html="dataset_real_musdb"><strong>Real (MUSDB18)</strong>: <a href="https://sigsep.github.io/datasets/musdb.html" target="_blank" rel="noopener">MUSDB18-HQ</a> — professional multitrack recordings (CC-BY-NC).</li>
+                        </ul>
+                        <p data-i18n-html="dataset_processing">All audio is level-normalized (EBU R128), segmented at track level, and filename-hashed to prevent identification bias.</p>
+                    </div>
+                    <div class="about-block">
                         <h4 data-i18n="opensource_title">Open Source</h4>
                         <p data-i18n-html="opensource_desc">This project is fully open source. You can review the entire codebase, including the server, at <a href="https://github.com/unohee/ai-music-survey" target="_blank" rel="noopener">github.com/unohee/ai-music-survey</a>.</p>
                     </div>
