@@ -170,7 +170,7 @@ def register_user(req: RegisterRequest, request: Request):
     nickname = req.nickname.strip()
 
     if not nickname or len(nickname) > 20:
-        raise HTTPException(status_code=400, detail="닉네임은 1-20자여야 합니다.")
+        raise HTTPException(status_code=400, detail="ERR_NICKNAME_LENGTH")
 
     conn = get_db()
     c = conn.cursor()
@@ -186,14 +186,14 @@ def register_user(req: RegisterRequest, request: Request):
     c.execute("SELECT id FROM users WHERE nickname = ?", (nickname,))
     if c.fetchone():
         conn.close()
-        raise HTTPException(status_code=409, detail="이미 사용 중인 닉네임입니다.")
+        raise HTTPException(status_code=409, detail="ERR_NICKNAME_TAKEN")
 
     try:
         c.execute("INSERT INTO users (ip_address, nickname) VALUES (?, ?)", (ip, nickname))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
-        raise HTTPException(status_code=409, detail="등록에 실패했습니다. 다시 시도해주세요.")
+        raise HTTPException(status_code=409, detail="ERR_REGISTER_FAILED")
 
     conn.close()
     return {"success": True, "nickname": nickname}

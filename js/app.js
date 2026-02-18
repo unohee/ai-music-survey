@@ -1,7 +1,7 @@
 /**
  * AI vs Real Music Survey — Gamification Edition
  * Created: 2026-02-11
- * Purpose: 스테이지 기반 게이미피케이션 + AI 음악 탐지 연구 데이터 수집
+ * Purpose: Stage-based gamification + AI music detection research data collection
  */
 
 // ============================================================================
@@ -9,34 +9,34 @@
 // ============================================================================
 
 const CONFIG = {
-    evaluationQuestions: 5,  // 워밍업 (연구 데이터, 라이프 무소모)
+    evaluationQuestions: 5,  // Warm-up (research data, no life cost)
     stages: [
         { id: 1, name: 'Normal',          questions: 5, variant: 'original', pointBase: 10, clearBonus: 50,
-          desc: '원본 음질의 12초 클립을 듣고 판별하세요.' },
+          descKey: 'stage_1_desc' },
         { id: 2, name: 'Time Pressure',   questions: 5, variant: '8s',      pointBase: 15, clearBonus: 75,
-          desc: '8초 클립만으로 빠르게 판단하세요!' },
+          descKey: 'stage_2_desc' },
         { id: 3, name: 'Codec Challenge',  questions: 5, variant: '128k',    pointBase: 20, clearBonus: 100,
-          desc: '128kbps 코덱 압축 — 미세한 차이를 잡아내세요.' },
+          descKey: 'stage_3_desc' },
         { id: 4, name: 'Lo-Fi Challenge',  questions: 5, variant: '64k',     pointBase: 25, clearBonus: 125,
-          desc: '64kbps 저음질 — 극한 조건에서 판별!' },
+          descKey: 'stage_4_desc' },
         { id: 5, name: 'Speed Round',      questions: 5, variant: '4s',      pointBase: 30, clearBonus: 150,
-          desc: '4초! 직감으로 승부하세요.' },
+          descKey: 'stage_5_desc' },
         { id: 6, name: 'Adversarial',      questions: 5, variant: 'original', pointBase: 40, clearBonus: 200,
-          desc: 'AI 모델도 헷갈려한 트랙들 — 보스 스테이지!', adversarial: true },
+          descKey: 'stage_6_desc', adversarial: true },
     ],
     maxLives: 3,
     streakBonus: 5,
     maxStreakBonus: 50,
-    lifeBonus: 100,  // 클리어 시 남은 라이프당 보너스
+    lifeBonus: 100,
     audioBasePath: 'audio/',
 };
 
-// 디버그 모드: ?debug=true 로 접속 시 라이프 무한
+// Debug mode: ?debug=true
 const DEBUG_MODE = new URLSearchParams(window.location.search).get('debug') === 'true';
 
 const LABELS = { AI: 0, REAL: 1 };
 const answerToLabel = (ans) => ans === 'ai' ? LABELS.AI : LABELS.REAL;
-const labelToText = (lbl) => lbl === LABELS.AI ? 'AI 생성' : '사람 연주';
+const labelToText = (lbl) => lbl === LABELS.AI ? t('label_ai') : t('label_real');
 
 // ============================================================================
 // Sound Effects
@@ -71,14 +71,14 @@ let state = {
     email: '',
     isReturningUser: false,
 
-    // Evaluation (워밍업)
+    // Evaluation (warm-up)
     evalIndex: 0,
     evalTracks: [],
     evalAnswers: [],
 
     // Game
-    currentStageIndex: 0,  // 0~5 (CONFIG.stages 인덱스)
-    stageQuestionIndex: 0, // 스테이지 내 문제 인덱스 (0~4)
+    currentStageIndex: 0,  // 0~5 (CONFIG.stages index)
+    stageQuestionIndex: 0, // question index within stage (0~4)
     lives: CONFIG.maxLives,
     score: 0,
     correctCount: 0,
@@ -87,7 +87,7 @@ let state = {
     maxStreak: 0,
     answers: [],
     stageResults: [],      // [{stageId, name, cleared, correct, total, score}]
-    stageTracks: [],       // 현재 스테이지 트랙 목록
+    stageTracks: [],       // current stage tracks
 
     currentTrack: null,
     isPlaying: false,
@@ -113,6 +113,9 @@ const API_URL = 'https://survey.intrect.io';
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // i18n initialization
+    setLanguage(detectLanguage());
+
     audio = document.getElementById('audio-player');
     audio.addEventListener('timeupdate', updateProgress);
     audio.addEventListener('ended', onAudioEnded);
@@ -123,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await displayWelcomeLeaderboard();
 
     if (DEBUG_MODE) {
-        console.log('🔧 DEBUG MODE ON — 라이프 무한');
+        console.log('🔧 DEBUG MODE ON — infinite lives');
         document.title = '[DEBUG] ' + document.title;
     }
     console.log('Survey initialized');
@@ -176,7 +179,7 @@ async function checkExistingUser() {
                 const input = document.getElementById('user-nickname');
                 input.value = data.nickname;
                 input.disabled = true;
-                document.getElementById('nickname-status').textContent = '이전에 등록한 닉네임입니다.';
+                document.getElementById('nickname-status').textContent = t('returning_user');
                 document.getElementById('nickname-status').classList.add('returning');
             }
         }
@@ -196,9 +199,11 @@ async function registerUser(nickname) {
             return { success: true };
         }
         const err = await res.json();
-        return { success: false, message: err.detail || '등록 실패' };
+        // Server returns error codes — translate on client
+        const errMsg = t(err.detail) || err.detail || t('err_register_fallback');
+        return { success: false, message: errMsg };
     } catch (e) {
-        // 오프라인이면 그냥 진행
+        // Offline — proceed anyway
         return { success: true };
     }
 }
@@ -211,7 +216,6 @@ function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(`screen-${screenId}`).classList.add('active');
     state.mode = screenId;
-    // 스크롤 맨 위로
     window.scrollTo(0, 0);
 }
 
@@ -224,12 +228,12 @@ async function startGame() {
     const email = document.getElementById('user-email').value.trim();
 
     if (!nickname) {
-        alert('닉네임을 입력해주세요!');
+        alert(t('alert_nickname_required'));
         document.getElementById('user-nickname').focus();
         return;
     }
 
-    // 신규 사용자면 등록
+    // Register new user
     if (!state.isReturningUser) {
         const reg = await registerUser(nickname);
         if (!reg.success) {
@@ -242,7 +246,7 @@ async function startGame() {
     state.email = email;
     state.startTime = new Date();
 
-    // 워밍업 트랙 선택 (5개: AI 3 + Real 2 or AI 2 + Real 3)
+    // Warm-up track selection (5: AI 3 + Real 2 or AI 2 + Real 3)
     const aiTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.AI));
     const realTracks = shuffleArray(audioPool.filter(t => t.label === LABELS.REAL));
     state.evalTracks = shuffleArray([...aiTracks.slice(0, 3), ...realTracks.slice(0, 2)]);
@@ -254,7 +258,7 @@ async function startGame() {
 }
 
 // ============================================================================
-// Evaluation (워밍업 5문제)
+// Evaluation (Warm-up 5 questions)
 // ============================================================================
 
 function loadEvalQuestion() {
@@ -262,6 +266,14 @@ function loadEvalQuestion() {
     state.currentTrack = track;
 
     document.getElementById('eval-current').textContent = state.evalIndex + 1;
+    // Update warm-up count text
+    const countEl = document.getElementById('eval-count-text');
+    if (countEl) {
+        countEl.innerHTML = t('warmup_count', { current: state.evalIndex + 1 }).replace(
+            String(state.evalIndex + 1),
+            `<span id="eval-current">${state.evalIndex + 1}</span>`
+        );
+    }
     loadAudio(track, 'original');
     resetChoices();
     hideFeedback();
@@ -278,22 +290,22 @@ function processEvalAnswer(answer, isCorrect, track) {
         time: new Date().toISOString()
     });
 
-    // 피드백 표시
+    // Feedback
     const feedbackEl = document.getElementById('feedback-eval');
     const labelText = labelToText(track.label);
 
     if (isCorrect) {
         playCorrectSound();
         feedbackEl.className = 'feedback correct';
-        feedbackEl.innerHTML = `✓ 정답! 이 음악은 <strong>${labelText}</strong>입니다.`;
+        feedbackEl.innerHTML = tHtml('feedback_correct', { label: `<strong>${labelText}</strong>` });
     } else {
         playWrongSound();
         feedbackEl.className = 'feedback wrong';
-        feedbackEl.innerHTML = `✗ 틀렸습니다. 정답은 <strong>${labelText}</strong>입니다.`;
+        feedbackEl.innerHTML = tHtml('feedback_wrong', { label: `<strong>${labelText}</strong>` });
     }
     feedbackEl.classList.remove('hidden');
 
-    // 정답 버튼 표시
+    // Highlight correct button
     const correctBtnClass = track.label === LABELS.AI
         ? '#screen-evaluation .btn-choice:first-child'
         : '#screen-evaluation .btn-choice:last-child';
@@ -305,7 +317,7 @@ function processEvalAnswer(answer, isCorrect, track) {
 function nextEvalQuestion() {
     state.evalIndex++;
     if (state.evalIndex >= CONFIG.evaluationQuestions) {
-        // 워밍업 완료 → Stage 1 인트로
+        // Warm-up complete → Stage 1 intro
         startStageSystem();
     } else {
         loadEvalQuestion();
@@ -317,7 +329,6 @@ function nextEvalQuestion() {
 // ============================================================================
 
 function startStageSystem() {
-    // 게임 상태 초기화
     state.currentStageIndex = 0;
     state.lives = CONFIG.maxLives;
     state.score = 0;
@@ -340,12 +351,13 @@ function showStageIntro() {
 
     document.getElementById('stage-intro-number').textContent = `STAGE ${stage.id}`;
     document.getElementById('stage-intro-name').textContent = stage.name;
-    document.getElementById('stage-intro-desc').textContent = stage.desc;
+    document.getElementById('stage-intro-desc').textContent = t(stage.descKey);
     document.getElementById('stage-intro-condition').innerHTML =
-        `<span>📋 ${stage.questions}문제</span><span>⭐ 기본 ${stage.pointBase}점</span>` +
-        (stage.clearBonus ? `<span>🏆 클리어 보너스 ${stage.clearBonus}점</span>` : '');
+        `<span>${t('stage_questions', { n: stage.questions })}</span>` +
+        `<span>${t('stage_points', { n: stage.pointBase })}</span>` +
+        (stage.clearBonus ? `<span>${t('stage_clear_bonus', { n: stage.clearBonus })}</span>` : '');
 
-    // 라이프 표시
+    // Lives display
     updateLivesDisplay('stage-intro-lives');
 
     showScreen('stage-intro');
@@ -355,7 +367,7 @@ function startStage() {
     const stage = CONFIG.stages[state.currentStageIndex];
     state.stageQuestionIndex = 0;
 
-    // 스테이지용 트랙 선택
+    // Select tracks for stage
     state.stageTracks = selectTracksForStage(stage);
 
     showScreen('game');
@@ -364,7 +376,7 @@ function startStage() {
 }
 
 function selectTracksForStage(stage) {
-    // 이미 사용된 트랙 ID 수집
+    // Collect used track IDs
     const usedIds = new Set([
         ...state.evalAnswers.map(a => a.trackId),
         ...state.answers.map(a => a.trackId)
@@ -373,13 +385,12 @@ function selectTracksForStage(stage) {
     let candidates;
 
     if (stage.adversarial) {
-        // Boss: adversarial_score 높은 순으로 사용 가능한 트랙
+        // Boss: use tracks with high adversarial_score
         candidates = audioPool
             .filter(t => t.adversarial_score != null && t.adversarial_score > 0 && !usedIds.has(t.id))
             .sort((a, b) => b.adversarial_score - a.adversarial_score);
 
         if (candidates.length < stage.questions) {
-            // 부족하면 일반 트랙으로 채움
             const extra = audioPool.filter(t => !usedIds.has(t.id) && !candidates.find(c => c.id === t.id));
             candidates = [...candidates, ...shuffleArray(extra)];
         }
@@ -387,7 +398,7 @@ function selectTracksForStage(stage) {
         candidates = audioPool.filter(t => !usedIds.has(t.id));
     }
 
-    // AI/Real 균형 (절반씩)
+    // AI/Real balance (half each)
     const aiCount = Math.ceil(stage.questions / 2);
     const realCount = stage.questions - aiCount;
 
@@ -399,7 +410,7 @@ function selectTracksForStage(stage) {
         ...realCandidates.slice(0, realCount)
     ];
 
-    // 부족하면 가능한 만큼 채움
+    // Fill remaining if not enough
     if (selected.length < stage.questions) {
         const remaining = shuffleArray(candidates.filter(t => !selected.find(s => s.id === t.id)));
         selected.push(...remaining.slice(0, stage.questions - selected.length));
@@ -422,7 +433,7 @@ function loadAudio(track, variant) {
         filePath = track.variants[variant];
     }
 
-    // activeFile 저장 (디버그 용도)
+    // Store activeFile for debug
     track._activeFile = filePath;
     audio.src = CONFIG.audioBasePath + filePath;
     audio.load();
@@ -595,11 +606,11 @@ function processGameAnswer(answer, isCorrect, track) {
 
         playWrongSound();
 
-        // 라이프 감소 애니메이션
+        // Life lost animation
         if (!DEBUG_MODE) animateLifeLost();
     }
 
-    // AI/Real 정확도 추적
+    // AI/Real accuracy tracking
     if (track.label === LABELS.AI) {
         state.aiTotal++;
         if (isCorrect) state.aiCorrect++;
@@ -619,11 +630,11 @@ function processGameAnswer(answer, isCorrect, track) {
         time: new Date().toISOString()
     });
 
-    // 피드백 표시
+    // Show feedback
     showGameFeedback(isCorrect, track.label, stage);
     updateGameUI();
 
-    // 정답/오답 버튼 표시
+    // Highlight correct/wrong buttons
     const correctBtnId = track.label === LABELS.AI ? 'btn-ai' : 'btn-real';
     document.getElementById(correctBtnId).classList.add('correct');
     if (!isCorrect) {
@@ -641,11 +652,12 @@ function showGameFeedback(isCorrect, correctLabel, stage) {
     if (isCorrect) {
         const streakBonus = Math.min(state.streak * CONFIG.streakBonus, CONFIG.maxStreakBonus);
         const points = stage.pointBase + streakBonus;
+        const streakStr = state.streak > 1 ? t('streak_text', { n: state.streak }) : '';
         feedbackEl.className = 'feedback correct';
-        feedbackEl.innerHTML = `✓ 정답! +${points}점 ${state.streak > 1 ? `(${state.streak}연속!)` : ''}`;
+        feedbackEl.innerHTML = tHtml('feedback_correct_points', { points: points, streak: streakStr });
     } else {
         feedbackEl.className = 'feedback wrong';
-        feedbackEl.innerHTML = `✗ 정답은 <strong>${labelText}</strong>입니다. ❤️ -1`;
+        feedbackEl.innerHTML = tHtml('feedback_wrong_life', { label: `<strong>${labelText}</strong>` });
     }
     feedbackEl.classList.remove('hidden');
 }
@@ -676,7 +688,7 @@ function updateGameUI() {
     // Stage badge
     document.getElementById('stage-badge').textContent = `Stage ${stage.id}: ${stage.name}`;
 
-    // Progress (스테이지 내)
+    // Progress (within stage)
     const progress = ((state.stageQuestionIndex + 1) / stage.questions) * 100;
     document.getElementById('progress-fill').style.width = `${progress}%`;
     document.getElementById('question-current').textContent = `${state.stageQuestionIndex + 1}`;
@@ -737,7 +749,7 @@ function nextQuestion() {
         return;
     }
 
-    // Game mode: 라이프 체크
+    // Game mode: life check
     if (state.lives <= 0 && !DEBUG_MODE) {
         handleGameOver();
         return;
@@ -747,7 +759,7 @@ function nextQuestion() {
     state.stageQuestionIndex++;
 
     if (state.stageQuestionIndex >= stage.questions) {
-        // 스테이지 클리어!
+        // Stage clear!
         completeStage(stage);
     } else {
         loadGameQuestion();
@@ -755,14 +767,14 @@ function nextQuestion() {
 }
 
 function completeStage(stage) {
-    // 스테이지 결과 기록
+    // Record stage result
     const stageCorrect = state.answers
         .filter(a => a.stageId === stage.id && a.correct).length;
 
-    // 클리어 보너스
+    // Clear bonus
     state.score += stage.clearBonus;
 
-    // 스테이지 클리어 시 라이프 회복 (+1, 최대치 제한)
+    // Life recovery on stage clear (+1, capped at max)
     if (state.lives < CONFIG.maxLives) {
         state.lives++;
         showScorePopup(`+${stage.clearBonus} CLEAR! ❤️+1`);
@@ -779,7 +791,7 @@ function completeStage(stage) {
         score: stage.clearBonus
     });
 
-    // 다음 스테이지 확인
+    // Next stage check
     state.currentStageIndex++;
     if (state.currentStageIndex >= CONFIG.stages.length) {
         // All Clear!
@@ -792,7 +804,7 @@ function completeStage(stage) {
 function handleGameOver() {
     const stage = CONFIG.stages[state.currentStageIndex];
 
-    // 현재 스테이지 결과 기록 (미완료)
+    // Record current stage result (incomplete)
     const stageCorrect = state.answers
         .filter(a => a.stageId === stage.id && a.correct).length;
     const stageTotal = state.answers
@@ -807,7 +819,7 @@ function handleGameOver() {
         score: 0
     });
 
-    // 나머지 스테이지는 locked
+    // Remaining stages are locked
     for (let i = state.currentStageIndex + 1; i < CONFIG.stages.length; i++) {
         state.stageResults.push({
             stageId: CONFIG.stages[i].id,
@@ -820,25 +832,25 @@ function handleGameOver() {
         });
     }
 
-    // Game Over 화면 표시
-    document.getElementById('gameover-stage').textContent = `Stage ${stage.id}: ${stage.name}에서 탈락!`;
+    // Game Over screen
+    document.getElementById('gameover-stage').textContent = t('gameover_stage', { id: stage.id, name: stage.name });
     document.getElementById('gameover-score').textContent = state.score;
 
     renderStageSummary('gameover-stage-summary');
 
     showScreen('game-over');
 
-    // 자동 제출 + 리더보드
+    // Auto submit + leaderboard
     autoSubmitAndShowLeaderboard('gameover');
 }
 
 async function handleAllClear() {
-    // 남은 라이프 보너스
+    // Remaining life bonus
     const lifeBonus = state.lives * CONFIG.lifeBonus;
     state.score += lifeBonus;
     if (lifeBonus > 0) showScorePopup(`+${lifeBonus} LIFE BONUS!`);
 
-    // 결과 화면
+    // Results screen
     const totalQuestions = CONFIG.stages.reduce((sum, s) => sum + s.questions, 0);
     const accuracy = totalQuestions > 0 ? (state.correctCount / totalQuestions) * 100 : 0;
     const aiAccuracy = state.aiTotal > 0 ? (state.aiCorrect / state.aiTotal) * 100 : 0;
@@ -868,7 +880,7 @@ function renderStageSummary(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    let html = '<h3>스테이지별 결과</h3>';
+    let html = `<h3>${t('stage_summary_title')}</h3>`;
     CONFIG.stages.forEach((stage, idx) => {
         const result = state.stageResults.find(r => r.stageId === stage.id);
         let cls = 'locked';
@@ -911,23 +923,23 @@ function showRank(accuracy) {
     let rank, message;
 
     if (accuracy >= 90) {
-        rank = '🏆 AI 탐지 전문가';
-        message = '당신의 귀는 AI를 완벽하게 구분합니다!';
+        rank = t('rank_expert');
+        message = t('rank_expert_msg');
     } else if (accuracy >= 80) {
-        rank = '🥇 골든 이어';
-        message = '뛰어난 청각 능력을 가지고 있습니다!';
+        rank = t('rank_gold');
+        message = t('rank_gold_msg');
     } else if (accuracy >= 70) {
-        rank = '🥈 실버 이어';
-        message = '평균 이상의 탐지 능력입니다.';
+        rank = t('rank_silver');
+        message = t('rank_silver_msg');
     } else if (accuracy >= 60) {
-        rank = '🥉 브론즈 이어';
-        message = '조금만 더 연습하면 됩니다!';
+        rank = t('rank_bronze');
+        message = t('rank_bronze_msg');
     } else if (accuracy >= 50) {
-        rank = '👂 일반인';
-        message = 'AI와 사람을 구분하기 어려우시군요.';
+        rank = t('rank_normal');
+        message = t('rank_normal_msg');
     } else {
-        rank = '🎲 운에 맡긴 자';
-        message = '찍기보다 못한 결과... 반대로 찍으세요!';
+        rank = t('rank_random');
+        message = t('rank_random_msg');
     }
 
     rankEl.innerHTML = `<h2>${rank}</h2><p>${message}</p>`;
@@ -998,14 +1010,14 @@ async function doSubmit(results) {
         console.error('Failed to submit results:', e);
     }
 
-    // localStorage 백업
+    // localStorage backup
     const saved = JSON.parse(localStorage.getItem('surveyResults') || '[]');
     saved.push(results);
     localStorage.setItem('surveyResults', JSON.stringify(saved));
 }
 
 async function autoSubmitAndShowLeaderboard(prefix) {
-    // 제출 (인구통계 없이 먼저)
+    // Submit (without demographics first)
     const results = buildSubmitPayload(prefix);
     try {
         await fetch(`${API_URL}/api/submit`, {
@@ -1017,7 +1029,7 @@ async function autoSubmitAndShowLeaderboard(prefix) {
         console.log('Auto-submit failed (offline)');
     }
 
-    // 리더보드 표시
+    // Display leaderboard
     const leaderboardId = prefix === 'gameover' ? 'gameover-leaderboard' : 'leaderboard';
     const percentileId = prefix === 'gameover' ? 'gameover-percentile-display' : 'percentile-display';
     await displayLeaderboardIn(leaderboardId, percentileId);
@@ -1034,15 +1046,15 @@ function getShareData() {
     const isAllClear = clearedStages >= CONFIG.stages.length;
     const url = 'https://unohee.github.io/ai-music-survey/';
 
-    // 상위 퍼센트 — 마지막으로 표시된 리더보드 순위 사용
+    // Top percentile — use last displayed leaderboard rank
     const percentile = state.lastPercentile || 50;
 
     const stageText = isAllClear ? 'ALL CLEAR 🎉' : `Stage ${clearedStages}/${CONFIG.stages.length}`;
     const emoji = isAllClear ? '👑' : clearedStages >= 4 ? '🔥' : clearedStages >= 2 ? '🎯' : '🎵';
 
-    const text = `${emoji} AI vs Real Music 챌린지\n` +
-        `${state.score}점 | ${accuracy}% 정확도 | ${stageText}\n` +
-        `나는 상위 ${percentile}%! 당신은 AI 음악을 구별할 수 있나요?`;
+    const text = `${emoji} ${t('share_challenge')}\n` +
+        t('share_stats', { score: state.score, accuracy: accuracy, stage: stageText }) + '\n' +
+        t('share_percentile', { pct: percentile });
 
     return { text, url, score: state.score, accuracy, stageText, percentile, emoji };
 }
@@ -1054,9 +1066,9 @@ function shareResults() {
         <div class="share-card">
             <div class="share-card-emoji">${data.emoji}</div>
             <div class="share-card-title">AI vs Real Music</div>
-            <div class="share-card-score">${data.score}점</div>
-            <div class="share-card-detail">${data.accuracy}% 정확도 | ${data.stageText}</div>
-            <div class="share-card-percentile">상위 ${data.percentile}%</div>
+            <div class="share-card-score">${t('share_stats', { score: data.score, accuracy: data.accuracy, stage: '' }).split('|')[0].trim()}</div>
+            <div class="share-card-detail">${data.accuracy}% ${t('label_accuracy')} | ${data.stageText}</div>
+            <div class="share-card-percentile">${t('percentile_top', { pct: data.percentile })}</div>
         </div>
     `;
     document.getElementById('share-modal').classList.remove('hidden');
@@ -1068,13 +1080,13 @@ function closeShareModal() {
 
 function shareToX() {
     const data = getShareData();
-    const text = encodeURIComponent(`${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`);
+    const text = encodeURIComponent(`${data.text}\n\n${data.url}`);
     window.open(`https://x.com/intent/post?text=${text}`, '_blank');
 }
 
 function shareToThreads() {
     const data = getShareData();
-    const text = encodeURIComponent(`${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`);
+    const text = encodeURIComponent(`${data.text}\n\n${data.url}`);
     window.open(`https://www.threads.net/intent/post?text=${text}`, '_blank');
 }
 
@@ -1085,25 +1097,25 @@ function shareToFacebook() {
 }
 
 function shareToInstagram() {
-    // Instagram은 직접 공유 API 없음 — 텍스트 복사 후 스토리로 안내
+    // Instagram has no direct share API — copy text and guide to Story
     const data = getShareData();
-    const text = `${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%!\n\n${data.url}`;
+    const text = `${data.text}\n\n${data.url}`;
     navigator.clipboard.writeText(text).then(() => {
-        alert('텍스트가 복사되었습니다!\nInstagram 스토리에 붙여넣기 해주세요 📋');
+        alert(t('alert_instagram_copy'));
     });
 }
 
 function copyShareText() {
     const data = getShareData();
-    const text = `${data.emoji} AI vs Real Music 챌린지\n${data.score}점 | ${data.accuracy}% | ${data.stageText}\n상위 ${data.percentile}%! 🎧\n\n${data.url}`;
+    const text = `${data.text}\n\n${data.url}`;
     navigator.clipboard.writeText(text).then(() => {
-        alert('클립보드에 복사되었습니다!');
+        alert(t('alert_copied'));
     });
 }
 
 function copyLink() {
     navigator.clipboard.writeText(window.location.href)
-        .then(() => alert('링크가 복사되었습니다!'));
+        .then(() => alert(t('alert_link_copied')));
 }
 
 function restartGame() {
@@ -1153,21 +1165,21 @@ function escapeHtml(text) {
 // Leaderboard
 // ============================================================================
 
-// 시드 리더보드: 실제 참여자 성적(최고 ASI 915점/Stage3) 기반 80% + placeholder 20%
+// Seed leaderboard: based on actual participant scores (80%) + placeholder (20%)
 const SEED_LEADERBOARD = [
-    // placeholder (20%) — 도달 가능한 목표치
-    { nickname: "골든이어", score: 1050, accuracy: 87, correctCount: 26, maxStreak: 10, maxStage: 5, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T09:30:00Z" },
-    { nickname: "프로듀서K", score: 820, accuracy: 80, correctCount: 24, maxStreak: 8, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T14:20:00Z" },
-    // 실제 참여자 성적 기반 (80%)
-    { nickname: "비트메이커", score: 680, accuracy: 77, correctCount: 23, maxStreak: 7, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T10:00:00Z" },
-    { nickname: "사운드헌터", score: 540, accuracy: 73, correctCount: 22, maxStreak: 6, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T13:30:00Z" },
+    // placeholder (20%)
+    { nickname: "GoldenEar", score: 1050, accuracy: 87, correctCount: 26, maxStreak: 10, maxStage: 5, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T09:30:00Z" },
+    { nickname: "ProducerK", score: 820, accuracy: 80, correctCount: 24, maxStreak: 8, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T14:20:00Z" },
+    // actual participant scores (80%)
+    { nickname: "BeatMaker", score: 680, accuracy: 77, correctCount: 23, maxStreak: 7, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T10:00:00Z" },
+    { nickname: "SoundHunter", score: 540, accuracy: 73, correctCount: 22, maxStreak: 6, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T13:30:00Z" },
     { nickname: "DJ_Seoul", score: 450, accuracy: 70, correctCount: 21, maxStreak: 5, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T18:00:00Z" },
-    { nickname: "뮤직러버", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T20:15:00Z" },
-    { nickname: "멜로디", score: 320, accuracy: 63, correctCount: 19, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T16:45:00Z" },
-    { nickname: "청음왕", score: 260, accuracy: 60, correctCount: 18, maxStreak: 3, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T09:45:00Z" },
-    { nickname: "음감테스터", score: 180, accuracy: 57, correctCount: 17, maxStreak: 3, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T12:00:00Z" },
-    { nickname: "랜덤리스너", score: 120, accuracy: 53, correctCount: 16, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T15:30:00Z" },
-    { nickname: "초보청취자", score: 60, accuracy: 47, correctCount: 14, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T17:00:00Z" },
+    { nickname: "MusicLover", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T20:15:00Z" },
+    { nickname: "Melody", score: 320, accuracy: 63, correctCount: 19, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T16:45:00Z" },
+    { nickname: "EarTrainer", score: 260, accuracy: 60, correctCount: 18, maxStreak: 3, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T09:45:00Z" },
+    { nickname: "ToneTester", score: 180, accuracy: 57, correctCount: 17, maxStreak: 3, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T12:00:00Z" },
+    { nickname: "RandomListener", score: 120, accuracy: 53, correctCount: 16, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T15:30:00Z" },
+    { nickname: "Newbie", score: 60, accuracy: 47, correctCount: 14, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T17:00:00Z" },
 ];
 
 async function getLeaderboard() {
@@ -1218,12 +1230,12 @@ async function displayWelcomeLeaderboard() {
 
     const leaderboard = await getLeaderboard();
     if (leaderboard.length === 0) {
-        container.innerHTML = '<p class="no-data">아직 기록이 없습니다.</p>';
+        container.innerHTML = `<p class="no-data">${t('no_records')}</p>`;
         return;
     }
 
     const top5 = leaderboard.slice(0, 5);
-    let html = '<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>닉네임</th><th>점수</th></tr></thead><tbody>';
+    let html = `<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
 
     top5.forEach((entry, index) => {
         const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
@@ -1245,16 +1257,16 @@ async function displayLeaderboardIn(leaderboardElId, percentileElId) {
     const percentileEl = document.getElementById(percentileElId);
 
     if (!leaderboardEl) return;
-    leaderboardEl.innerHTML = '<p class="loading">리더보드 불러오는 중...</p>';
+    leaderboardEl.innerHTML = `<p class="loading">${t('loading_leaderboard')}</p>`;
 
     const leaderboard = await getLeaderboard();
 
     if (leaderboard.length === 0) {
-        leaderboardEl.innerHTML = '<p class="no-data">아직 기록이 없습니다.</p>';
+        leaderboardEl.innerHTML = `<p class="no-data">${t('no_records')}</p>`;
         return;
     }
 
-    // 현재 사용자 순위
+    // Current user rank
     const userRank = leaderboard.findIndex(e =>
         e.nickname === state.nickname && e.score === state.score
     ) + 1;
@@ -1264,14 +1276,14 @@ async function displayLeaderboardIn(leaderboardElId, percentileElId) {
         state.lastPercentile = parseInt(percentile);
         percentileEl.innerHTML = `
             <div class="percentile-badge">
-                <span class="percentile-rank">${userRank}위</span>
-                <span class="percentile-text">상위 ${percentile > 0 ? percentile : 1}%</span>
+                <span class="percentile-rank">${t('percentile_rank_text', { rank: userRank })}</span>
+                <span class="percentile-text">${t('percentile_top', { pct: percentile > 0 ? percentile : 1 })}</span>
             </div>
         `;
     }
 
     const top10 = leaderboard.slice(0, 10);
-    let html = '<table class="leaderboard-table"><thead><tr><th>#</th><th>닉네임</th><th>점수</th></tr></thead><tbody>';
+    let html = `<table class="leaderboard-table"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
 
     top10.forEach((entry, index) => {
         const isCurrentUser = entry.nickname === state.nickname && entry.score === state.score;
