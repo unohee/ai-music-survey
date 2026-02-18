@@ -146,6 +146,22 @@ const I18N = {
     alert_link_copied: 'Link copied!',
     alert_instagram_copy: 'Text copied!\nPaste it into your Instagram Story 📋',
 
+    // About & Privacy
+    about_toggle: 'About This Study & Privacy',
+    about_title: 'About This Study',
+    about_desc: 'This is an <strong>academic research project</strong> investigating how well humans can distinguish AI-generated music from real human performances. The results contribute to ongoing research in music perception and AI audio generation.',
+    privacy_title: 'Privacy & Data',
+    privacy_no_tracking: 'No cookies, analytics, or third-party tracking of any kind.',
+    privacy_nickname: '<strong>Nickname</strong> is used only for the leaderboard. You can use any alias.',
+    privacy_email: '<strong>Email</strong> is entirely optional — only used if you wish to be contacted for research follow-up.',
+    privacy_ip: '<strong>IP address</strong> is checked solely to prevent duplicate registrations. It is not linked to your responses.',
+    privacy_anonymous: 'All gameplay data (answers, scores) is collected anonymously for research purposes only.',
+    privacy_no_sell: 'Your data will never be sold, shared with third parties, or used for commercial purposes.',
+    opensource_title: 'Open Source',
+    opensource_desc: 'This project is fully open source. You can review the entire codebase, including the server, at <a href="https://github.com/unohee/ai-music-survey" target="_blank" rel="noopener">github.com/unohee/ai-music-survey</a>.',
+    contact_title: 'Contact',
+    contact_desc: 'For questions about this research, please open an issue on <a href="https://github.com/unohee/ai-music-survey/issues" target="_blank" rel="noopener">GitHub</a> or contact the researcher directly.',
+
     // Server errors
     ERR_NICKNAME_LENGTH: 'Nickname must be 1-20 characters.',
     ERR_NICKNAME_TAKEN: 'This nickname is already taken.',
@@ -289,6 +305,22 @@ const I18N = {
     alert_copied: '클립보드에 복사되었습니다!',
     alert_link_copied: '링크가 복사되었습니다!',
     alert_instagram_copy: '텍스트가 복사되었습니다!\nInstagram 스토리에 붙여넣기 해주세요 📋',
+
+    // About & Privacy
+    about_toggle: '연구 소개 & 개인정보 처리',
+    about_title: '연구 소개',
+    about_desc: '본 프로젝트는 사람이 AI 생성 음악과 실제 사람의 연주를 얼마나 잘 구분할 수 있는지를 조사하는 <strong>학술 연구</strong>입니다. 수집된 결과는 음악 인지 및 AI 오디오 생성 분야의 연구에 활용됩니다.',
+    privacy_title: '개인정보 & 데이터',
+    privacy_no_tracking: '쿠키, 분석 도구, 제3자 추적을 일절 사용하지 않습니다.',
+    privacy_nickname: '<strong>닉네임</strong>은 리더보드 표시 용도로만 사용됩니다. 아무 별명이나 사용 가능합니다.',
+    privacy_email: '<strong>이메일</strong>은 완전히 선택사항이며, 연구 후속 연락을 원하실 경우에만 사용됩니다.',
+    privacy_ip: '<strong>IP 주소</strong>는 중복 등록 방지 목적으로만 확인되며, 응답 데이터와 연결되지 않습니다.',
+    privacy_anonymous: '모든 게임 데이터(응답, 점수)는 익명으로 수집되며 연구 목적으로만 사용됩니다.',
+    privacy_no_sell: '수집된 데이터는 절대 판매, 제3자 공유, 상업적 목적으로 사용되지 않습니다.',
+    opensource_title: '오픈 소스',
+    opensource_desc: '본 프로젝트는 완전한 오픈 소스입니다. 서버를 포함한 전체 코드를 <a href="https://github.com/unohee/ai-music-survey" target="_blank" rel="noopener">github.com/unohee/ai-music-survey</a>에서 확인할 수 있습니다.',
+    contact_title: '문의',
+    contact_desc: '본 연구에 대한 문의는 <a href="https://github.com/unohee/ai-music-survey/issues" target="_blank" rel="noopener">GitHub</a>에 이슈를 남기시거나 연구자에게 직접 연락해 주세요.',
 
     // Server errors
     ERR_NICKNAME_LENGTH: '닉네임은 1-20자여야 합니다.',

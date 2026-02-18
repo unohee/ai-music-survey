@@ -47,6 +47,39 @@
             </div>
 
             <button class="btn btn-primary" id="btn-start" data-i18n="btn_start" onclick="startGame()">Start</button>
+
+            <!-- About & Privacy -->
+            <div class="about-section">
+                <button class="about-toggle" onclick="this.parentElement.classList.toggle('open')">
+                    <span data-i18n="about_toggle">About This Study & Privacy</span>
+                    <span class="about-arrow">▼</span>
+                </button>
+                <div class="about-content">
+                    <div class="about-block">
+                        <h4 data-i18n="about_title">About This Study</h4>
+                        <p data-i18n-html="about_desc">This is an <strong>academic research project</strong> investigating how well humans can distinguish AI-generated music from real human performances. The results contribute to ongoing research in music perception and AI audio generation.</p>
+                    </div>
+                    <div class="about-block">
+                        <h4 data-i18n="privacy_title">Privacy & Data</h4>
+                        <ul>
+                            <li data-i18n="privacy_no_tracking">No cookies, analytics, or third-party tracking of any kind.</li>
+                            <li data-i18n-html="privacy_nickname"><strong>Nickname</strong> is used only for the leaderboard. You can use any alias.</li>
+                            <li data-i18n-html="privacy_email"><strong>Email</strong> is entirely optional — only used if you wish to be contacted for research follow-up.</li>
+                            <li data-i18n-html="privacy_ip"><strong>IP address</strong> is checked solely to prevent duplicate registrations. It is not linked to your responses.</li>
+                            <li data-i18n="privacy_anonymous">All gameplay data (answers, scores) is collected anonymously for research purposes only.</li>
+                            <li data-i18n="privacy_no_sell">Your data will never be sold, shared with third parties, or used for commercial purposes.</li>
+                        </ul>
+                    </div>
+                    <div class="about-block">
+                        <h4 data-i18n="opensource_title">Open Source</h4>
+                        <p data-i18n-html="opensource_desc">This project is fully open source. You can review the entire codebase, including the server, at <a href="https://github.com/unohee/ai-music-survey" target="_blank" rel="noopener">github.com/unohee/ai-music-survey</a>.</p>
+                    </div>
+                    <div class="about-block">
+                        <h4 data-i18n="contact_title">Contact</h4>
+                        <p data-i18n-html="contact_desc">For questions about this research, please open an issue on <a href="https://github.com/unohee/ai-music-survey/issues" target="_blank" rel="noopener">GitHub</a> or contact the researcher directly.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Evaluation Screen (Warm-up 5 questions) -->

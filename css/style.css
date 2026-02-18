@@ -1163,3 +1163,101 @@ h1 {
 .lang-toggle:hover {
     background: rgba(255, 255, 255, 0.25);
 }
+
+/* ============================================================================
+   About & Privacy Section
+   ============================================================================ */
+
+.about-section {
+    margin-top: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.about-toggle {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #a0a0a0;
+    font-size: 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.about-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.about-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.about-section.open .about-arrow {
+    transform: rotate(180deg);
+}
+
+.about-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.about-section.open .about-content {
+    max-height: 800px;
+}
+
+.about-block {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.about-block h4 {
+    font-size: 0.85rem;
+    color: #e94560;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.about-block p {
+    font-size: 0.82rem;
+    color: #b0b0b0;
+    line-height: 1.5;
+}
+
+.about-block ul {
+    list-style: none;
+    padding: 0;
+}
+
+.about-block ul li {
+    font-size: 0.82rem;
+    color: #b0b0b0;
+    line-height: 1.5;
+    padding: 3px 0 3px 16px;
+    position: relative;
+}
+
+.about-block ul li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #4ade80;
+    font-size: 0.75rem;
+}
+
+.about-block a {
+    color: #f9d423;
+    text-decoration: none;
+}
+
+.about-block a:hover {
+    text-decoration: underline;
+}
