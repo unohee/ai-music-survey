@@ -1235,21 +1235,37 @@ async function displayWelcomeLeaderboard() {
     }
 
     const top10 = leaderboard.slice(0, 10);
-    let html = `<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
+    const hasMore = leaderboard.length > 10;
 
-    top10.forEach((entry, index) => {
-        const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
-        html += `
-            <tr>
-                <td>${rankIcon}</td>
-                <td>${escapeHtml(entry.nickname)}</td>
-                <td>${entry.score}</td>
-            </tr>
-        `;
-    });
+    function renderWelcomeLeaderboard(showAll) {
+        const entries = showAll ? leaderboard : top10;
+        let html = `<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
 
-    html += '</tbody></table>';
-    container.innerHTML = html;
+        entries.forEach((entry, index) => {
+            const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+            html += `
+                <tr>
+                    <td>${rankIcon}</td>
+                    <td>${escapeHtml(entry.nickname)}</td>
+                    <td>${entry.score}</td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        if (hasMore) {
+            html += `<button class="leaderboard-toggle" id="welcome-lb-toggle">${showAll ? t('collapse_rankings') : t('show_all_rankings')}</button>`;
+        }
+        container.innerHTML = html;
+
+        if (hasMore) {
+            document.getElementById('welcome-lb-toggle').addEventListener('click', () => {
+                renderWelcomeLeaderboard(!showAll);
+            });
+        }
+    }
+
+    renderWelcomeLeaderboard(false);
 }
 
 async function displayLeaderboardIn(leaderboardElId, percentileElId) {
@@ -1283,33 +1299,50 @@ async function displayLeaderboardIn(leaderboardElId, percentileElId) {
     }
 
     const top10 = leaderboard.slice(0, 10);
-    let html = `<table class="leaderboard-table"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
+    const hasMore = leaderboard.length > 10;
+    const toggleId = `${leaderboardElId}-lb-toggle`;
 
-    top10.forEach((entry, index) => {
-        const isCurrentUser = entry.nickname === state.nickname && entry.score === state.score;
-        const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+    function renderLeaderboard(showAll) {
+        const entries = showAll ? leaderboard : top10;
+        let html = `<table class="leaderboard-table"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
 
-        html += `
-            <tr class="${isCurrentUser ? 'current-user' : ''}">
-                <td>${rankIcon}</td>
-                <td>${escapeHtml(entry.nickname)}</td>
-                <td>${entry.score}</td>
-            </tr>
-        `;
-    });
+        entries.forEach((entry, index) => {
+            const isCurrentUser = entry.nickname === state.nickname && entry.score === state.score;
+            const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
 
-    if (userRank > 10) {
-        const userEntry = leaderboard[userRank - 1];
-        html += `
-            <tr class="separator"><td colspan="3">...</td></tr>
-            <tr class="current-user">
-                <td>${userRank}</td>
-                <td>${escapeHtml(userEntry.nickname)}</td>
-                <td>${userEntry.score}</td>
-            </tr>
-        `;
+            html += `
+                <tr class="${isCurrentUser ? 'current-user' : ''}">
+                    <td>${rankIcon}</td>
+                    <td>${escapeHtml(entry.nickname)}</td>
+                    <td>${entry.score}</td>
+                </tr>
+            `;
+        });
+
+        if (!showAll && userRank > 10) {
+            const userEntry = leaderboard[userRank - 1];
+            html += `
+                <tr class="separator"><td colspan="3">...</td></tr>
+                <tr class="current-user">
+                    <td>${userRank}</td>
+                    <td>${escapeHtml(userEntry.nickname)}</td>
+                    <td>${userEntry.score}</td>
+                </tr>
+            `;
+        }
+
+        html += '</tbody></table>';
+        if (hasMore) {
+            html += `<button class="leaderboard-toggle" id="${toggleId}">${showAll ? t('collapse_rankings') : t('show_all_rankings')}</button>`;
+        }
+        leaderboardEl.innerHTML = html;
+
+        if (hasMore) {
+            document.getElementById(toggleId).addEventListener('click', () => {
+                renderLeaderboard(!showAll);
+            });
+        }
     }
 
-    html += '</tbody></table>';
-    leaderboardEl.innerHTML = html;
+    renderLeaderboard(false);
 }
