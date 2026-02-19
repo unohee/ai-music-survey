@@ -1234,10 +1234,10 @@ async function displayWelcomeLeaderboard() {
         return;
     }
 
-    const top5 = leaderboard.slice(0, 5);
+    const top10 = leaderboard.slice(0, 10);
     let html = `<table class="leaderboard-table leaderboard-mini"><thead><tr><th>#</th><th>${t('col_nickname')}</th><th>${t('col_score')}</th></tr></thead><tbody>`;
 
-    top5.forEach((entry, index) => {
+    top10.forEach((entry, index) => {
         const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
         html += `
             <tr>
