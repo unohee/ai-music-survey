@@ -985,6 +985,25 @@ h1 {
     border: none;
 }
 
+.leaderboard-toggle {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #a0a0a0;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.leaderboard-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f9d423;
+}
+
 .no-data,
 .loading {
     text-align: center;

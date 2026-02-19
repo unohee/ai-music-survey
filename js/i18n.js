@@ -92,6 +92,8 @@ const I18N = {
     col_nickname: 'Nickname',
     col_score: 'Score',
     no_records: 'No records yet.',
+    show_all_rankings: 'View All Rankings',
+    collapse_rankings: 'Show Top 10',
     percentile_rank_text: '#{rank}',
     percentile_top: 'Top {pct}%',
 
@@ -264,6 +266,8 @@ const I18N = {
     col_nickname: '닉네임',
     col_score: '점수',
     no_records: '아직 기록이 없습니다.',
+    show_all_rankings: '전체 순위 보기',
+    collapse_rankings: 'Top 10만 보기',
     percentile_rank_text: '{rank}위',
     percentile_top: '상위 {pct}%',
 
