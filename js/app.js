@@ -96,6 +96,7 @@ let state = {
     aiTotal: 0,
     realCorrect: 0,
     realTotal: 0,
+    submitted: false,
 };
 
 // Audio pool
@@ -997,6 +998,9 @@ async function submitResultsFromGameOver() {
 }
 
 async function doSubmit(results) {
+    if (state.submitted) return;
+    state.submitted = true;
+
     try {
         const response = await fetch(`${API_URL}/api/submit`, {
             method: 'POST',
@@ -1017,19 +1021,8 @@ async function doSubmit(results) {
 }
 
 async function autoSubmitAndShowLeaderboard(prefix) {
-    // Submit (without demographics first)
-    const results = buildSubmitPayload(prefix);
-    try {
-        await fetch(`${API_URL}/api/submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(results)
-        });
-    } catch (e) {
-        console.log('Auto-submit failed (offline)');
-    }
-
-    // Display leaderboard
+    // 자동 제출 제거 — submitResults() / submitResultsFromGameOver()에서만 1회 제출
+    // 여기서는 리더보드 표시만 수행
     const leaderboardId = prefix === 'gameover' ? 'gameover-leaderboard' : 'leaderboard';
     const percentileId = prefix === 'gameover' ? 'gameover-percentile-display' : 'percentile-display';
     await displayLeaderboardIn(leaderboardId, percentileId);
@@ -1132,6 +1125,7 @@ function restartGame() {
         answers: [], stageResults: [], stageTracks: [],
         currentTrack: null, isPlaying: false, startTime: null,
         aiCorrect: 0, aiTotal: 0, realCorrect: 0, realTotal: 0, lastPercentile: 50,
+        submitted: false,
     };
 
     if (!state.isReturningUser) {
@@ -1165,29 +1159,12 @@ function escapeHtml(text) {
 // Leaderboard
 // ============================================================================
 
-// Seed leaderboard: based on actual participant scores (80%) + placeholder (20%)
-const SEED_LEADERBOARD = [
-    // placeholder (20%)
-    { nickname: "GoldenEar", score: 1050, accuracy: 87, correctCount: 26, maxStreak: 10, maxStage: 5, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T09:30:00Z" },
-    { nickname: "ProducerK", score: 820, accuracy: 80, correctCount: 24, maxStreak: 8, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T14:20:00Z" },
-    // actual participant scores (80%)
-    { nickname: "BeatMaker", score: 680, accuracy: 77, correctCount: 23, maxStreak: 7, maxStage: 4, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T10:00:00Z" },
-    { nickname: "SoundHunter", score: 540, accuracy: 73, correctCount: 22, maxStreak: 6, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T13:30:00Z" },
-    { nickname: "DJ_Seoul", score: 450, accuracy: 70, correctCount: 21, maxStreak: 5, maxStage: 3, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T18:00:00Z" },
-    { nickname: "MusicLover", score: 380, accuracy: 67, correctCount: 20, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T20:15:00Z" },
-    { nickname: "Melody", score: 320, accuracy: 63, correctCount: 19, maxStreak: 4, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T16:45:00Z" },
-    { nickname: "EarTrainer", score: 260, accuracy: 60, correctCount: 18, maxStreak: 3, maxStage: 2, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-09T09:45:00Z" },
-    { nickname: "ToneTester", score: 180, accuracy: 57, correctCount: 17, maxStreak: 3, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T12:00:00Z" },
-    { nickname: "RandomListener", score: 120, accuracy: 53, correctCount: 16, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-08T15:30:00Z" },
-    { nickname: "Newbie", score: 60, accuracy: 47, correctCount: 14, maxStreak: 2, maxStage: 1, livesRemaining: 0, is_game_over: 1, timestamp: "2026-02-10T17:00:00Z" },
-];
-
 async function getLeaderboard() {
     try {
         const response = await fetch(`${API_URL}/api/leaderboard`);
         if (response.ok) {
             const apiData = await response.json();
-            const converted = apiData.map(entry => ({
+            return apiData.map(entry => ({
                 nickname: entry.nickname,
                 score: entry.score,
                 accuracy: entry.accuracy,
@@ -1198,30 +1175,12 @@ async function getLeaderboard() {
                 is_game_over: entry.is_game_over || 0,
                 timestamp: entry.timestamp
             }));
-
-            const merged = [...converted, ...SEED_LEADERBOARD];
-            const uniqueMap = new Map();
-            merged.forEach(entry => {
-                const existing = uniqueMap.get(entry.nickname);
-                if (!existing || entry.score > existing.score) {
-                    uniqueMap.set(entry.nickname, entry);
-                }
-            });
-
-            const leaderboard = Array.from(uniqueMap.values());
-            leaderboard.sort((a, b) => b.score - a.score);
-            return leaderboard.slice(0, 100);
         }
     } catch (e) {
         console.error('Leaderboard fetch failed:', e);
     }
 
-    let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || 'null');
-    if (!leaderboard) {
-        leaderboard = [...SEED_LEADERBOARD];
-        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
-    }
-    return leaderboard;
+    return [];
 }
 
 async function displayWelcomeLeaderboard() {

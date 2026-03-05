@@ -4,18 +4,30 @@ Created: 2026-02-11
 Purpose: Collect survey results from GitHub Pages
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 
 app = FastAPI(title="AI Music Survey API")
+
+# Admin 인증
+security = HTTPBearer(auto_error=False)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "change-me-in-production")
+
+async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials or credentials.credentials != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+# 점수 검증 상수
+MAX_POSSIBLE_SCORE = 3000
 
 # CORS 설정 - GitHub Pages에서 접근 허용
 app.add_middleware(
@@ -144,7 +156,7 @@ def root():
 
 @app.get("/admin")
 def admin_page():
-    """Admin dashboard"""
+    """Admin dashboard — 페이지 자체는 공개, API 호출 시 토큰 검증"""
     return FileResponse(os.path.join(DATA_DIR, "admin.html"))
 
 
@@ -202,61 +214,82 @@ def register_user(req: RegisterRequest, request: Request):
 @app.post("/api/submit")
 def submit_result(result: SurveyResult, request: Request):
     """설문 결과 제출"""
+    # 점수 범위 검증
+    if result.score < 0 or result.score > MAX_POSSIBLE_SCORE:
+        raise HTTPException(status_code=400, detail="ERR_INVALID_SCORE")
+
     ip = get_client_ip(request)
     ua = request.headers.get("user-agent", "")
 
     conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    c.execute('''
-        INSERT INTO results (
-            nickname, email, score, accuracy, correct_count, max_streak,
-            ai_accuracy, real_accuracy, duration,
-            music_experience, ai_experience, criteria,
-            answers, timestamp, ip_address, user_agent,
-            max_stage, lives_remaining, is_game_over, stage_results
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        result.nickname,
-        result.email,
-        result.score,
-        result.accuracy,
-        result.correctCount,
-        result.maxStreak,
-        result.aiAccuracy,
-        result.realAccuracy,
-        result.duration,
-        result.demographics.get('musicExperience', ''),
-        result.demographics.get('aiExperience', ''),
-        result.demographics.get('criteria', ''),
-        json.dumps(result.answers, ensure_ascii=False),
-        result.timestamp,
-        ip,
-        ua,
-        result.maxStage,
-        result.livesRemaining,
-        1 if result.isGameOver else 0,
-        json.dumps(result.stageResults, ensure_ascii=False) if result.stageResults else None,
-    ))
+        # 중복 제출 방지: 같은 닉네임+점수가 60초 내 존재하면 거부
+        cutoff = (datetime.now() - timedelta(seconds=60)).isoformat()
+        c.execute('''
+            SELECT id FROM results
+            WHERE nickname = ? AND score = ? AND created_at > ?
+            LIMIT 1
+        ''', (result.nickname, result.score, cutoff))
+        if c.fetchone():
+            return {"success": True, "id": -1, "duplicate": True}
 
-    conn.commit()
-    result_id = c.lastrowid
-    conn.close()
+        c.execute('''
+            INSERT INTO results (
+                nickname, email, score, accuracy, correct_count, max_streak,
+                ai_accuracy, real_accuracy, duration,
+                music_experience, ai_experience, criteria,
+                answers, timestamp, ip_address, user_agent,
+                max_stage, lives_remaining, is_game_over, stage_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            result.nickname,
+            result.email,
+            result.score,
+            result.accuracy,
+            result.correctCount,
+            result.maxStreak,
+            result.aiAccuracy,
+            result.realAccuracy,
+            result.duration,
+            result.demographics.get('musicExperience', ''),
+            result.demographics.get('aiExperience', ''),
+            result.demographics.get('criteria', ''),
+            json.dumps(result.answers, ensure_ascii=False),
+            result.timestamp,
+            ip,
+            ua,
+            result.maxStage,
+            result.livesRemaining,
+            1 if result.isGameOver else 0,
+            json.dumps(result.stageResults, ensure_ascii=False) if result.stageResults else None,
+        ))
+
+        conn.commit()
+        result_id = c.lastrowid
+    finally:
+        conn.close()
 
     return {"success": True, "id": result_id}
 
 
 @app.get("/api/leaderboard")
-def get_leaderboard(limit: int = 100):
-    """리더보드 조회 (max_stage DESC, score DESC)"""
+def get_leaderboard(limit: int = 1000):
+    """리더보드 조회 — 닉네임별 최고 점수만 반환"""
     conn = get_db()
     c = conn.cursor()
 
     c.execute('''
-        SELECT nickname, score, accuracy, correct_count, max_streak,
-               max_stage, lives_remaining, is_game_over, timestamp
-        FROM results
-        ORDER BY score DESC
+        SELECT r.nickname, r.score, r.accuracy, r.correct_count, r.max_streak,
+               r.max_stage, r.lives_remaining, r.is_game_over, r.timestamp
+        FROM results r
+        INNER JOIN (
+            SELECT nickname, MAX(score) as max_score
+            FROM results GROUP BY nickname
+        ) best ON r.nickname = best.nickname AND r.score = best.max_score
+        GROUP BY r.nickname
+        ORDER BY r.score DESC
         LIMIT ?
     ''', (limit,))
 
@@ -298,8 +331,8 @@ def get_stats():
 
 
 @app.get("/api/results")
-def get_results(limit: int = 100, offset: int = 0):
-    """전체 결과 조회 (admin용)"""
+def get_results(limit: int = 1000, offset: int = 0, _admin=Depends(verify_admin)):
+    """전체 결과 조회 (admin용 — 인증 필수)"""
     conn = get_db()
     c = conn.cursor()
 
@@ -316,8 +349,8 @@ def get_results(limit: int = 100, offset: int = 0):
 
 
 @app.get("/api/export")
-def export_results():
-    """결과 내보내기 (CSV용 JSON)"""
+def export_results(_admin=Depends(verify_admin)):
+    """결과 내보내기 (admin용 — 인증 필수)"""
     conn = get_db()
     c = conn.cursor()
 
