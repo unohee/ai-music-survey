@@ -193,10 +193,9 @@ python scripts/prepare_variants.py
 
 ## 관리자 인증
 
-- **admin/index.html** 및 **server/admin.html** 둘 다 하드코딩된 인증 사용
-- username: `intrect`, password: `***REMOVED***`
-- sessionStorage 기반 (서버 세션 아님)
-- 보안 수준 낮음 — 프로덕션 전 개선 필요
+- `GET /api/results`, `GET /api/export` 는 `Authorization: Bearer <ADMIN_TOKEN>` 이 필요하다. 토큰은 서버 환경변수 `ADMIN_TOKEN` 이고 저장소에는 없다.
+- `server/admin.html` 은 로그인 때 토큰을 입력받아 메모리에만 보관한다.
+- 이 문서의 이전 판에 클라이언트 하드코딩 자격증명이 적혀 있었다. 2026-10-20 에 파일과 이력에서 제거했고, 이미 공개돼 있었으므로 **노출된 것으로 보고 폐기**한다.
 
 ---
 
@@ -225,7 +224,7 @@ python scripts/prepare_variants.py
 
 ## 알려진 이슈 / TODO
 
-- [ ] 관리자 인증을 서버 사이드로 이전 (현재 클라이언트 하드코딩)
+- [x] 관리자 인증을 서버 사이드(Bearer 토큰)로 이전 — 완료
 - [ ] Cloudflare Workers 백엔드 정리 또는 활용 결정
 - [ ] 오디오 자동재생 모바일 브라우저 호환성 확인
 - [ ] survey_results.db 백업 전략
